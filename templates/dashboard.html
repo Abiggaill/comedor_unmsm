@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Principal - Comedor UNMSM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="header">
+        <h1>🏛️ Comedor UNMSM - Sistema de Reservas</h1>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <h2>Bienvenido(a), {{ nombres }} 👋</h2>
+            <p><strong>Rol asignado:</strong> {{ rol }}</p>
+            <div class="alert success">
+                ✅ Autenticación exitosa. Estás dentro del sistema privado.
+            </div>
+            <br>
+            <a href="{{ url_for('logout') }}" class="btn-danger">Cerrar Sesión</a>
+        </div>
+    </main>
+</body>
+</html>
