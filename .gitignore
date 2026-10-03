@@ -1,0 +1,11 @@
+# Entorno local de Python y archivos generados
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+static/qr/
+.env
+.env.*
+!.env.example
+comedor.db
+comedor.db-*

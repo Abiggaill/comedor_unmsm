@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de reservas | Comedor UNMSM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page">
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('dashboard.inicio') }}" aria-label="Inicio del comedor">
+            <span class="brand-mark" aria-hidden="true">U</span>
+            <span>Comedor <strong>UNMSM</strong></span>
+        </a>
+        <div class="user-menu">
+            <span class="welcome">Hola, <strong>{{ nombres }}</strong></span>
+            <form action="{{ url_for('auth.logout') }}" method="POST">
+                <button class="logout-button" type="submit">Cerrar sesión</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <section class="dashboard-intro">
+            <p class="eyebrow">COMEDOR UNIVERSITARIO</p>
+            <h1>Tu almuerzo, más fácil.</h1>
+            <p>Elige tu menú y guarda tu reserva para hoy.</p>
+        </section>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="alerts" role="status" aria-live="polite">
+                    {% for category, message in messages %}
+                        <div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if reserva %}
+            {% if not reserva.finalizada or mostrar_ticket %}
+                <section class="dashboard-card ticket-card">
+                    <div class="card-heading">
+                        <div>
+                            <p class="eyebrow">RESERVA CONFIRMADA · {{ menu.fecha }}</p>
+                            <h2>Tu ticket digital</h2>
+                        </div>
+                        <span class="status-badge">{{ reserva.estado }}</span>
+                    </div>
+                    <div class="ticket-content">
+                        <div class="qr-container">
+                            <img src="{{ qr_data_uri }}" alt="Código QR de tu reserva">
+                        </div>
+                        <div class="ticket-details">
+                            <p>Presenta este código QR en la ventanilla del comedor para recibir tu ración.</p>
+                            <span class="detail-label">CÓDIGO DE RESERVA</span>
+                            <code>{{ reserva.codigo_qr }}</code>
+                            <div class="ticket-selections">
+                                <span><strong>Entrada:</strong> {{ reserva.entrada_elegida or 'No registrada' }}</span>
+                                <span><strong>Segundo:</strong> {{ reserva.segundo_elegido or 'No registrado' }}</span>
+                                <span><strong>Postre / bebida:</strong> {{ reserva.postre_bebida_elegido or 'Sin selección' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% if not reserva.finalizada %}
+                        <form class="finish-form" action="{{ url_for('dashboard.finalizar_reserva', reserva_id=reserva.id) }}" method="POST">
+                            <button type="submit" class="btn-primary finish-button">Finalizar y volver al panel</button>
+                        </form>
+                    {% else %}
+                        <a class="text-action" href="{{ url_for('dashboard.inicio') }}">Volver al resumen de mi reserva</a>
+                    {% endif %}
+                </section>
+            {% else %}
+                <section class="dashboard-card completed-card">
+                    <div class="card-heading">
+                        <div>
+                            <p class="eyebrow">RESERVA GUARDADA · {{ menu.fecha }}</p>
+                            <h2>Ya reservaste tu opción</h2>
+                        </div>
+                        <span class="status-badge">{{ reserva.estado }}</span>
+                    </div>
+                    <p class="completed-copy">Tu selección quedó registrada para este menú. No se puede realizar otra reserva para el mismo día.</p>
+                    <div class="selection-summary">
+                        <p><span>Entrada</span><strong>{{ reserva.entrada_elegida or 'Reserva anterior' }}</strong></p>
+                        <p><span>Segundo</span><strong>{{ reserva.segundo_elegido or 'Reserva anterior' }}</strong></p>
+                        <p><span>Postre / bebida</span><strong>{{ reserva.postre_bebida_elegido or 'Sin selección' }}</strong></p>
+                    </div>
+                    <a class="btn-primary view-ticket-button" href="{{ url_for('dashboard.inicio', ver_ticket=1) }}">Volver a ver mi ticket</a>
+                </section>
+            {% endif %}
+        {% elif menu %}
+            <section class="dashboard-card menu-card">
+                <div class="card-heading">
+                    <div>
+                        <p class="eyebrow">MENÚ DEL DÍA · {{ menu.fecha }}</p>
+                        <h2>Elige tu almuerzo</h2>
+                    </div>
+                    <span class="seats-badge">{{ menu.cupos_disponibles }} cupos</span>
+                </div>
+
+                <form id="reservation-form" action="{{ url_for('dashboard.reservar', menu_id=menu.id) }}" method="POST">
+                    <fieldset class="choice-group">
+                        <legend><span class="choice-number">01</span><span>Entrada <small>Obligatoria</small></span></legend>
+                        <div class="choice-options">
+                            {% for opcion in opciones.entrada %}
+                                <label class="choice-option">
+                                    <input type="radio" name="entrada" value="{{ opcion }}" required>
+                                    <span>{{ opcion }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="choice-group">
+                        <legend><span class="choice-number">02</span><span>Segundo <small>Obligatorio</small></span></legend>
+                        <div class="choice-options">
+                            {% for opcion in opciones.segundo %}
+                                <label class="choice-option">
+                                    <input type="radio" name="segundo" value="{{ opcion }}" required>
+                                    <span>{{ opcion }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="choice-group dessert-group">
+                        <legend><span class="choice-number">03</span><span>Postre o bebida <small>Opcional</small></span></legend>
+                        <div class="choice-options">
+                            {% for opcion in opciones.postre_bebida %}
+                                <label class="choice-option">
+                                    <input type="radio" name="postre_bebida" value="{{ opcion }}">
+                                    <span>{{ opcion }}</span>
+                                </label>
+                            {% endfor %}
+                            <label class="choice-option optional-choice">
+                                <input type="radio" name="postre_bebida" value="">
+                                <span>Sin postre ni bebida</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <p class="selection-hint">Selecciona una entrada y un segundo. El postre o la bebida son opcionales.</p>
+                    {% if menu.cupos_disponibles > 0 %}
+                        <button id="reserve-button" type="submit" class="btn-primary reserve-button" disabled>
+                            Confirmar mi reserva <span aria-hidden="true">→</span>
+                        </button>
+                    {% else %}
+                        <button class="btn-primary reserve-button" type="button" disabled>Cupos agotados</button>
+                    {% endif %}
+                </form>
+            </section>
+        {% else %}
+            <section class="dashboard-card empty-state">
+                <span class="empty-icon" aria-hidden="true">🍽️</span>
+                <h2>Aún no hay un menú publicado</h2>
+                <p>Vuelve pronto para consultar las opciones del comedor.</p>
+            </section>
+        {% endif %}
+
+        <footer class="dashboard-footer">Universidad Nacional Mayor de San Marcos</footer>
+    </main>
+
+    <script>
+        const reservationForm = document.getElementById("reservation-form");
+        const reserveButton = document.getElementById("reserve-button");
+        if (reservationForm && reserveButton) {
+            const updateReservationButton = () => {
+                const hasEntry = reservationForm.querySelector('input[name="entrada"]:checked');
+                const hasSecond = reservationForm.querySelector('input[name="segundo"]:checked');
+                reserveButton.disabled = !(hasEntry && hasSecond);
+            };
+            reservationForm.addEventListener("change", updateReservationButton);
+            updateReservationButton();
+        }
+    </script>
+</body>
+</html>
