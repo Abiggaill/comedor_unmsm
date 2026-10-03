@@ -9,3 +9,11 @@ static/qr/
 !.env.example
 comedor.db
 comedor.db-*
+.DS_Store
+Thumbs.db
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
