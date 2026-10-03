@@ -15,6 +15,7 @@
         <div class="user-menu">
             <span class="welcome">Hola, <strong>{{ nombres }}</strong></span>
             <form action="{{ url_for('auth.logout') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="logout-button" type="submit">Cerrar sesión</button>
             </form>
         </div>
@@ -38,7 +39,20 @@
         {% endwith %}
 
         {% if reserva %}
-            {% if not reserva.finalizada or mostrar_ticket %}
+            {% if reserva.estado == 'ENTREGADO' %}
+                <section class="dashboard-card completed-card">
+                    <div class="card-heading">
+                        <div><p class="eyebrow">RESERVA · {{ menu.fecha }}</p><h2>Tu ración fue entregada</h2></div>
+                        <span class="status-badge">ENTREGADO</span>
+                    </div>
+                    <p class="completed-copy">El comedor ya registró la entrega de tu menú. Este ticket no puede volver a utilizarse.</p>
+                    <div class="selection-summary">
+                        <p><span>Entrada</span><strong>{{ reserva.entrada_elegida or 'No registrada' }}</strong></p>
+                        <p><span>Segundo</span><strong>{{ reserva.segundo_elegido or 'No registrado' }}</strong></p>
+                        <p><span>Postre / bebida</span><strong>{{ reserva.postre_bebida_elegido or 'Sin selección' }}</strong></p>
+                    </div>
+                </section>
+            {% elif not reserva.finalizada or mostrar_ticket %}
                 <section class="dashboard-card ticket-card">
                     <div class="card-heading">
                         <div>
@@ -64,6 +78,7 @@
                     </div>
                     {% if not reserva.finalizada %}
                         <form class="finish-form" action="{{ url_for('dashboard.finalizar_reserva', reserva_id=reserva.id) }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-primary finish-button">Finalizar y volver al panel</button>
                         </form>
                     {% else %}
@@ -99,6 +114,7 @@
                 </div>
 
                 <form id="reservation-form" action="{{ url_for('dashboard.reservar', menu_id=menu.id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <fieldset class="choice-group">
                         <legend><span class="choice-number">01</span><span>Entrada <small>Obligatoria</small></span></legend>
                         <div class="choice-options">

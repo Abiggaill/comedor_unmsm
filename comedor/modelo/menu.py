@@ -52,6 +52,74 @@ class Menu:
             ).fetchone()
 
     @staticmethod
+    def obtener_por_fecha(fecha):
+        with db.connection() as conn:
+            return conn.execute(
+                "SELECT * FROM menus WHERE fecha = ? ORDER BY id DESC LIMIT 1",
+                (fecha,),
+            ).fetchone()
+
+    @staticmethod
+    def datos_edicion(fecha):
+        with db.connection() as conn:
+            menu = conn.execute(
+                "SELECT * FROM menus WHERE fecha = ? ORDER BY id DESC LIMIT 1",
+                (fecha,),
+            ).fetchone()
+            if not menu:
+                menu = conn.execute(
+                    "SELECT * FROM menus ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                if not menu:
+                    return None, 0
+                reservadas = conn.execute(
+                    "SELECT COUNT(*) AS total FROM reservas WHERE menu_id = ?",
+                    (menu["id"],),
+                ).fetchone()["total"]
+                return menu, reservadas
+            reservadas = conn.execute(
+                "SELECT COUNT(*) AS total FROM reservas WHERE menu_id = ?",
+                (menu["id"],),
+            ).fetchone()["total"]
+            return menu, reservadas
+
+    @staticmethod
+    def guardar(fecha, entrada, segundo, postre_bebida, cupos_totales):
+        with db.connection(immediate=True) as conn:
+            menu = conn.execute(
+                "SELECT id FROM menus WHERE fecha = ? ORDER BY id DESC LIMIT 1",
+                (fecha,),
+            ).fetchone()
+            if menu:
+                reservadas = conn.execute(
+                    "SELECT COUNT(*) AS total FROM reservas WHERE menu_id = ?",
+                    (menu["id"],),
+                ).fetchone()["total"]
+                if cupos_totales < reservadas:
+                    raise ValueError(
+                        f"Ya existen {reservadas} reservas para esa fecha; "
+                        "los cupos totales no pueden ser menores."
+                    )
+                conn.execute(
+                    """UPDATE menus SET entrada = ?, segundo = ?, postre_bebida = ?,
+                       cupos_disponibles = ? WHERE id = ?""",
+                    (
+                        entrada,
+                        segundo,
+                        postre_bebida,
+                        cupos_totales - reservadas,
+                        menu["id"],
+                    ),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO menus
+                       (fecha, entrada, segundo, postre_bebida, cupos_disponibles)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (fecha, entrada, segundo, postre_bebida, cupos_totales),
+                )
+
+    @staticmethod
     def opciones(menu):
         return {
             "entrada": Menu._separar(menu["entrada"]),

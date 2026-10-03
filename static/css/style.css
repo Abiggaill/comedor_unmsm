@@ -217,6 +217,30 @@ body.dashboard-page::before, body.dashboard-page::after { position: absolute; z-
 .empty-icon { display: block; margin-bottom: 12px; font-size: 2.6rem; }
 .empty-state p { margin: 10px 0 0; color: var(--muted); }
 .dashboard-footer { padding: 32px 0 0; color: #96929d; text-align: center; font-size: .8rem; }
+.staff-card { display: grid; gap: 24px; }
+.staff-card form { margin: 0; }
+.staff-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.staff-actions .btn-secondary { border: 0; cursor: pointer; font: inherit; }
+.qr-camera { display: block; width: min(100%, 480px); max-height: 360px; margin: 18px auto 0; border-radius: 14px; background: #211f25; }
+.validation-result { margin-top: 24px; padding: 20px; border: 1px solid #e6e1e7; border-radius: 14px; background: #fcfbfc; }
+.validation-result h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.validation-result p { margin: 0; color: var(--muted); }
+.validation-result.entregado { border-color: #a9d8ba; background: #edfaf2; }
+.validation-result.ya_entregado { border-color: #f0d38a; background: #fff8e8; }
+.validation-result.no_encontrado { border-color: #e9b7b7; background: #fff0f0; }
+.date-picker-form { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 12px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.date-picker-form .form-group { margin-bottom: 0; }
+.date-picker-form .btn-secondary { border: 0; cursor: pointer; font: inherit; }
+.field-help { display: block; margin-top: 7px; color: var(--muted); line-height: 1.45; }
+.staff-user-list { display: grid; }
+.staff-user-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(250px, 1fr); align-items: center; gap: 18px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+.staff-user-row:last-child { border-bottom: 0; }
+.staff-user-row > div { display: grid; gap: 5px; overflow-wrap: anywhere; }
+.staff-user-row > div span, .staff-user-row > div small { color: var(--muted); }
+.role-form { display: flex; align-items: center; gap: 9px; }
+.role-form select { min-width: 0; flex: 1; min-height: 42px; padding: 8px; border: 1px solid #dedbe3; border-radius: 9px; background: #fff; font: inherit; }
+.role-form .btn-secondary { flex: 0 0 auto; padding: 11px 14px; border: 0; cursor: pointer; font: inherit; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -235,6 +259,8 @@ body.dashboard-page::before, body.dashboard-page::after { position: absolute; z-
     .choice-options { grid-template-columns: 1fr; padding-left: 0; }
     .selection-summary { grid-template-columns: 1fr; }
     .view-ticket-button { display: flex; width: 100%; }
+    .date-picker-form, .staff-user-row { grid-template-columns: 1fr; }
+    .role-form { align-items: stretch; }
 }
 
 @media (prefers-reduced-motion: reduce) {

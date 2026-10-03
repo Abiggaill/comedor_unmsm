@@ -10,6 +10,33 @@ class ErrorReserva(ValueError):
 
 class Reserva:
     @staticmethod
+    def validar_ticket(codigo_qr):
+        codigo_qr = (codigo_qr or "").strip().upper()
+        if not codigo_qr:
+            return "no_encontrado", None
+
+        with db.connection(immediate=True) as conn:
+            reserva = conn.execute(
+                """SELECT r.id, r.estado, r.codigo_qr, r.menu_id, u.nombres
+                   FROM reservas r JOIN usuarios u ON u.id = r.usuario_id
+                   WHERE r.codigo_qr = ?""",
+                (codigo_qr,),
+            ).fetchone()
+            if not reserva:
+                return "no_encontrado", None
+            if reserva["estado"] != "Reservado":
+                return "ya_entregado", reserva
+
+            cursor = conn.execute(
+                "UPDATE reservas SET estado = 'ENTREGADO' "
+                "WHERE id = ? AND estado = 'Reservado'",
+                (reserva["id"],),
+            )
+            if cursor.rowcount != 1:
+                return "ya_entregado", reserva
+            return "entregado", reserva
+
+    @staticmethod
     def buscar_por_usuario_y_menu(usuario_id, menu_id):
         with db.connection() as conn:
             return conn.execute(

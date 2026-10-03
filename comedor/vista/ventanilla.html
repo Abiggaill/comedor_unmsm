@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validar tickets | Comedor UNMSM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page">
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('gestion.ventanilla') }}"><span class="brand-mark">U</span><span>Comedor <strong>UNMSM</strong></span></a>
+        <div class="user-menu">
+            {% if session.get('rol') == 'Administrador' %}<a class="text-action" href="{{ url_for('gestion.menu') }}">Gestión del menú</a><a class="text-action" href="{{ url_for('gestion.usuarios') }}">Usuarios</a>{% endif %}
+            <form action="{{ url_for('auth.logout') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="logout-button" type="submit">Cerrar sesión</button>
+            </form>
+        </div>
+    </header>
+    <main class="dashboard-main">
+        <section class="dashboard-intro">
+            <p class="eyebrow">PERSONAL DE COMEDOR</p>
+            <h1>Validar ticket</h1>
+            <p>Escanea el QR o escribe el código para registrar la entrega.</p>
+        </section>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}<div class="alerts" role="status" aria-live="polite">{% for category, message in messages %}<div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+        {% endwith %}
+        <section class="dashboard-card staff-card">
+            <form id="ticket-form" method="POST" action="{{ url_for('gestion.ventanilla') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="codigo">Código del ticket</label>
+                    <input id="codigo" name="codigo" type="text" value="{{ codigo }}" placeholder="Ej.: UNMSM-MENU1-AB12CD34" autocomplete="off" required autofocus>
+                </div>
+                <div class="staff-actions">
+                    <button class="btn-secondary" id="scan-button" type="button">Usar cámara para escanear QR</button>
+                    <button class="btn-primary" type="submit">Validar y registrar entrega</button>
+                </div>
+                <p id="scan-status" class="security-note" aria-live="polite">También puedes usar un lector QR que escriba el código en el campo.</p>
+                <video id="qr-camera" class="qr-camera" playsinline hidden></video>
+            </form>
+            {% if resultado %}
+                <div class="validation-result {{ resultado.estado }}" role="status" aria-live="polite">
+                    {% if resultado.estado == 'entregado' %}
+                        <h2>✅ Entrega registrada</h2><p>Ticket de {{ resultado.reserva.nombres }} marcado como entregado.</p>
+                    {% elif resultado.estado == 'ya_entregado' %}
+                        <h2>⚠️ Este ticket ya fue canjeado</h2><p>El ticket pertenece a {{ resultado.reserva.nombres }}.</p>
+                    {% else %}
+                        <h2>❌ No encontramos ese ticket</h2><p>Revisa el código e inténtalo nuevamente.</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </section>
+        <footer class="dashboard-footer">Universidad Nacional Mayor de San Marcos</footer>
+    </main>
+    <script>
+        const scanButton = document.getElementById("scan-button");
+        const video = document.getElementById("qr-camera");
+        const input = document.getElementById("codigo");
+        const scanStatus = document.getElementById("scan-status");
+        let cameraStream;
+        scanButton.addEventListener("click", async () => {
+            if (!window.BarcodeDetector || !navigator.mediaDevices?.getUserMedia) {
+                scanStatus.textContent = "Este navegador no admite escaneo de QR con cámara. Escribe el código o usa un lector QR.";
+                return;
+            }
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = cameraStream;
+                video.hidden = false;
+                await video.play();
+                const detector = new BarcodeDetector({ formats: ["qr_code"] });
+                scanStatus.textContent = "Apunta la cámara al QR.";
+                const scan = async () => {
+                    if (!cameraStream?.active) return;
+                    const codes = await detector.detect(video);
+                    if (codes.length) {
+                        input.value = codes[0].rawValue;
+                        cameraStream.getTracks().forEach(track => track.stop());
+                        video.hidden = true;
+                        scanStatus.textContent = "Código leído. Pulsa «Validar y registrar entrega» para continuar.";
+                        return;
+                    }
+                    requestAnimationFrame(scan);
+                };
+                scan();
+            } catch (error) {
+                scanStatus.textContent = "No se pudo abrir la cámara. Escribe el código del ticket.";
+            }
+        });
+    </script>
+</body>
+</html>

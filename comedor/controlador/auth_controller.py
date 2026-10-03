@@ -2,7 +2,7 @@
 
 from functools import wraps
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 
 from ..modelo.intentos_login import IntentosLogin
 from ..modelo.database import db
@@ -20,6 +20,27 @@ def login_required(view):
         return view(*args, **kwargs)
 
     return wrapped_view
+
+
+def role_required(*roles):
+    def decorate(view):
+        @wraps(view)
+        def wrapped_view(*args, **kwargs):
+            user_id = session.get("user_id")
+            if user_id is None:
+                return redirect(url_for("auth.login"))
+            rol = Usuario.rol_actual(user_id)
+            if rol is None:
+                session.clear()
+                return redirect(url_for("auth.login"))
+            session["rol"] = rol
+            if rol not in roles:
+                abort(403)
+            return view(*args, **kwargs)
+
+        return wrapped_view
+
+    return decorate
 
 
 @auth.route("/", methods=["GET", "POST"])
@@ -45,6 +66,10 @@ def login():
             session["nombres"] = usuario["nombres"]
             session["dni"] = usuario["dni"]
             session["rol"] = usuario["rol"]
+            if usuario["rol"] == "Ventanilla":
+                return redirect(url_for("gestion.ventanilla"))
+            if usuario["rol"] in ("Nutricionista", "Administrador"):
+                return redirect(url_for("gestion.menu"))
             return redirect(url_for("dashboard.inicio"))
 
         intentos, minutos = IntentosLogin.registrar_fallo(correo)

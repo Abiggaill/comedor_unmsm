@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión del menú | Comedor UNMSM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page">
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('gestion.menu') }}"><span class="brand-mark">U</span><span>Comedor <strong>UNMSM</strong></span></a>
+        <div class="user-menu">
+            {% if session.get('rol') == 'Administrador' %}<a class="text-action" href="{{ url_for('gestion.ventanilla') }}">Ventanilla</a>{% endif %}
+            {% if session.get('rol') == 'Administrador' %}<a class="text-action" href="{{ url_for('gestion.usuarios') }}">Usuarios</a>{% endif %}
+            <form action="{{ url_for('auth.logout') }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout-button" type="submit">Cerrar sesión</button></form>
+        </div>
+    </header>
+    <main class="dashboard-main">
+        <section class="dashboard-intro"><p class="eyebrow">NUTRICIONISTA / ADMINISTRACIÓN</p><h1>Gestión del menú</h1><p>Publica o actualiza las opciones y los cupos de una fecha.</p></section>
+        {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}<div class="alerts" role="status" aria-live="polite">{% for category, message in messages %}<div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>{% endfor %}</div>{% endif %}{% endwith %}
+        <section class="dashboard-card staff-card">
+            <form method="GET" action="{{ url_for('gestion.menu') }}" class="date-picker-form">
+                <div class="form-group"><label for="fecha-buscar">Fecha del menú</label><input id="fecha-buscar" type="date" name="fecha" value="{{ fecha }}" required></div>
+                <button class="btn-secondary" type="submit">Ver fecha</button>
+            </form>
+            <form method="POST" action="{{ url_for('gestion.menu') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="fecha" value="{{ fecha }}">
+                <div class="form-group"><label for="entrada">Entrada</label><input id="entrada" name="entrada" maxlength="500" value="{{ menu.entrada if menu else '' }}" placeholder="Ej.: Sopa / ensalada" required></div>
+                <div class="form-group"><label for="segundo">Segundo</label><input id="segundo" name="segundo" maxlength="500" value="{{ menu.segundo if menu else '' }}" placeholder="Ej.: Pollo guisado / opción vegetariana" required></div>
+                <div class="form-group"><label for="postre-bebida">Postre o bebida</label><input id="postre-bebida" name="postre_bebida" maxlength="500" value="{{ menu.postre_bebida if menu else '' }}" placeholder="Ej.: Fruta / refresco" required></div>
+                <div class="form-group"><label for="cupos">Cupos totales del día</label><input id="cupos" name="cupos_totales" type="number" min="1" max="100000" value="{{ cupos_totales }}" required><small class="field-help">Reservas registradas para esta fecha: {{ reservadas }}. Al guardar, esos cupos se descuentan automáticamente.</small></div>
+                <button class="btn-primary" type="submit">Guardar menú</button>
+            </form>
+        </section>
+        <footer class="dashboard-footer">Universidad Nacional Mayor de San Marcos</footer>
+    </main>
+</body>
+</html>

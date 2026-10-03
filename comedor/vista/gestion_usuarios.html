@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roles de usuario | Comedor UNMSM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page">
+    <header class="site-header">
+        <a class="brand" href="{{ url_for('gestion.usuarios') }}"><span class="brand-mark">U</span><span>Comedor <strong>UNMSM</strong></span></a>
+        <div class="user-menu"><a class="text-action" href="{{ url_for('gestion.menu') }}">Gestión del menú</a><a class="text-action" href="{{ url_for('gestion.ventanilla') }}">Ventanilla</a><form action="{{ url_for('auth.logout') }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout-button" type="submit">Cerrar sesión</button></form></div>
+    </header>
+    <main class="dashboard-main">
+        <section class="dashboard-intro"><p class="eyebrow">SOLO ADMINISTRACIÓN</p><h1>Roles de usuario</h1><p>Asigna acceso únicamente al personal autorizado.</p></section>
+        {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}<div class="alerts" role="status" aria-live="polite">{% for category, message in messages %}<div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>{% endfor %}</div>{% endif %}{% endwith %}
+        <section class="dashboard-card staff-card">
+            {% if usuarios %}
+                <div class="staff-user-list">
+                    {% for usuario in usuarios %}
+                        <article class="staff-user-row">
+                            <div><strong>{{ usuario.nombres }}</strong><span>{{ usuario.correo }}</span><small>Rol actual: {{ usuario.rol }}</small></div>
+                            <form method="POST" action="{{ url_for('gestion.usuarios') }}" class="role-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                <label class="visually-hidden" for="rol-{{ usuario.id }}">Nuevo rol para {{ usuario.nombres }}</label>
+                                <select id="rol-{{ usuario.id }}" name="rol">{% for rol in roles %}<option value="{{ rol }}" {% if rol == usuario.rol %}selected{% endif %}>{{ rol }}</option>{% endfor %}</select>
+                                <button class="btn-secondary" type="submit">Guardar rol</button>
+                            </form>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}<p>Aún no hay cuentas registradas.</p>{% endif %}
+        </section>
+        <footer class="dashboard-footer">Universidad Nacional Mayor de San Marcos</footer>
+    </main>
+</body>
+</html>

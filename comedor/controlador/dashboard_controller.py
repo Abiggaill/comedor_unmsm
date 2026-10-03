@@ -8,19 +8,21 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from ..modelo.menu import Menu
 from ..modelo.database import db
 from ..modelo.reserva import ErrorReserva, Reserva
-from .auth_controller import login_required
+from .auth_controller import role_required
 
 
 dashboard = Blueprint("dashboard", __name__)
 
 
 @dashboard.route("/dashboard")
-@login_required
+@role_required("Estudiante")
 def inicio():
     menu = Menu.obtener_del_dia()
     reserva = Reserva.buscar_por_usuario_y_menu(session["user_id"], menu["id"]) if menu else None
     qr_data_uri = None
-    if reserva and (not reserva["finalizada"] or request.args.get("ver_ticket") == "1"):
+    if reserva and reserva["estado"] == "Reservado" and (
+        not reserva["finalizada"] or request.args.get("ver_ticket") == "1"
+    ):
         import base64
         import io
 
@@ -41,7 +43,7 @@ def inicio():
 
 
 @dashboard.route("/reservar/<int:menu_id>", methods=["POST"])
-@login_required
+@role_required("Estudiante")
 def reservar(menu_id):
     codigo_qr = f"UNMSM-MENU{menu_id}-{uuid.uuid4().hex[:8].upper()}"
 
@@ -69,7 +71,7 @@ def reservar(menu_id):
 
 
 @dashboard.route("/finalizar/<int:reserva_id>", methods=["POST"])
-@login_required
+@role_required("Estudiante")
 def finalizar_reserva(reserva_id):
     if Reserva.finalizar(reserva_id, session["user_id"]):
         flash(
