@@ -111,6 +111,109 @@ def initialize_schema():
             "CREATE INDEX IF NOT EXISTS idx_mercaderia_proveedor "
             "ON mercaderia (proveedor_id)"
         )
+        # These indexes make the labelled demonstration records idempotent
+        # when Render starts several application workers at deployment time.
+        if db.is_postgres:
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_proveedores_razon_social "
+                "ON proveedores (razon_social)"
+            )
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_mercaderia_demo_lote "
+                "ON mercaderia (lote) WHERE lote = 'DEMO-ETAPA5-001'"
+            )
+
+            conn.execute(
+                """INSERT INTO proveedores
+                       (razon_social, nombre_contacto, telefono, correo, direccion, activo)
+                   VALUES (?, ?, ?, ?, ?, TRUE)
+                   ON CONFLICT (razon_social) DO NOTHING""",
+                (
+                    "DEMO - Proveedor de alimentos",
+                    "Contacto de prueba",
+                    "999000001",
+                    "proveedor.demo@example.com",
+                    "Dirección ficticia - Lima",
+                ),
+            )
+            conn.execute(
+                """INSERT INTO servicios
+                       (nombre, descripcion, horario_inicio, horario_fin, activo)
+                   VALUES (?, ?, ?, ?, TRUE)
+                   ON CONFLICT (nombre) DO NOTHING""",
+                (
+                    "DEMO - Almuerzo",
+                    "Servicio de ejemplo para probar la tabla servicios",
+                    "12:00",
+                    "15:00",
+                ),
+            )
+            conn.execute(
+                """INSERT INTO productos (nombre, categoria, descripcion, activo)
+                   VALUES (?, ?, ?, TRUE)
+                   ON CONFLICT (nombre, categoria) DO NOTHING""",
+                (
+                    "DEMO - Arroz con pollo",
+                    "Segundo",
+                    "Plato ficticio de demostración",
+                ),
+            )
+            conn.execute(
+                """INSERT INTO insumos (nombre, unidad_medida, stock_minimo, activo)
+                   VALUES (?, ?, ?, TRUE)
+                   ON CONFLICT (nombre) DO NOTHING""",
+                ("DEMO - Arroz", "kg", 2.000),
+            )
+
+            # Clients belong to existing student accounts; do not invent a
+            # login or attach the demo profile to an administrator account.
+            conn.execute(
+                """INSERT INTO clientes (usuario_id, telefono, activo)
+                   SELECT u.id, ?, TRUE
+                   FROM usuarios AS u
+                   WHERE u.rol = 'Estudiante'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM clientes AS c WHERE c.usuario_id = u.id
+                     )
+                   ORDER BY u.id
+                   LIMIT 1
+                   ON CONFLICT (usuario_id) DO NOTHING""",
+                ("999000002",),
+            )
+            conn.execute(
+                """INSERT INTO mercaderia
+                       (insumo_id, proveedor_id, tipo_movimiento, cantidad,
+                        costo_unitario, lote, observacion)
+                   SELECT i.id, p.id, 'ENTRADA', ?, ?, ?, ?
+                   FROM insumos AS i
+                   CROSS JOIN proveedores AS p
+                   WHERE i.nombre = ? AND p.razon_social = ?
+                   ON CONFLICT DO NOTHING""",
+                (
+                    10.000,
+                    4.50,
+                    "DEMO-ETAPA5-001",
+                    "Movimiento ficticio de demostración",
+                    "DEMO - Arroz",
+                    "DEMO - Proveedor de alimentos",
+                ),
+            )
+            conn.execute(
+                """INSERT INTO producto_insumos
+                       (producto_id, insumo_id, cantidad, unidad_medida)
+                   SELECT p.id, i.id, ?, ?
+                   FROM productos AS p
+                   CROSS JOIN insumos AS i
+                   WHERE p.nombre = ? AND p.categoria = ? AND i.nombre = ?
+                   ON CONFLICT (producto_id, insumo_id) DO NOTHING""",
+                (
+                    0.150,
+                    "kg",
+                    "DEMO - Arroz con pollo",
+                    "Segundo",
+                    "DEMO - Arroz",
+                ),
+            )
 
         if db.is_postgres:
             rows = conn.execute(
