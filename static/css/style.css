@@ -462,3 +462,31 @@ body.dashboard-page::before, body.dashboard-page::after { position: absolute; z-
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Administration CRUD for stage-five records. */
+.inventory-welcome { align-items: center; gap: 20px; }
+.inventory-table-wrap { overflow-x: auto; }
+.inventory-table { min-width: 720px; }
+.inventory-hint { margin: 0 0 18px; padding: 14px 17px; border: 1px solid #ead9a5; border-radius: 12px; background: #fff9e8; color: #5b4b20; line-height: 1.55; }
+.inventory-hint a, .inventory-back-link { color: #176b58; font-weight: 700; }
+.inventory-status { display: inline-block; padding: 4px 9px; border-radius: 999px; font-size: .78rem; font-weight: 750; }
+.inventory-status.is-active { background: #e5f5ec; color: #176b42; }
+.inventory-status.is-inactive { background: #f2eff1; color: #6b6269; }
+.inventory-muted { color: #817b84; }
+.inventory-form-main { max-width: 900px; }
+.inventory-back-link { display: inline-block; margin: 4px 0 16px; text-decoration: none; }
+.inventory-form-card { padding: clamp(20px, 4vw, 38px); border: 1px solid #eeedf2; border-radius: 18px; background: #fff; box-shadow: 0 10px 32px rgba(34, 24, 39, .045); }
+.inventory-form-card h1 { margin: 0; color: #29232d; font-size: clamp(1.7rem, 4vw, 2.35rem); }
+.inventory-form-intro { max-width: 680px; margin: 9px 0 24px; color: #706a75; line-height: 1.6; }
+.inventory-form .form-label { color: #39333c; font-weight: 650; }
+.inventory-form .form-control, .inventory-form .form-select { min-height: 46px; border-color: #ded9e1; border-radius: 10px; }
+.inventory-form textarea.form-control { min-height: 100px; }
+.inventory-checkbox { margin: 6px 0 21px; }
+.inventory-checkbox .form-check-label { font-weight: 650; }
+.inventory-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 26px; }
+.inventory-form-actions .admin-add-button { border: 0; cursor: pointer; }
+@media (max-width: 767.98px) {
+    .inventory-welcome { align-items: flex-start; flex-direction: column; }
+    .inventory-form-actions { align-items: stretch; flex-direction: column; }
+    .inventory-form-actions > * { justify-content: center; text-align: center; }
+}

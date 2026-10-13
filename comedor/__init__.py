@@ -10,6 +10,7 @@ from flask_wtf.csrf import CSRFProtect
 from .controlador.auth_controller import auth
 from .controlador.dashboard_controller import dashboard
 from .controlador.gestion_controller import gestion
+from .controlador.inventario_controller import inventario
 from .modelo.schema import initialize_schema
 
 
@@ -44,4 +45,5 @@ def create_app(test_config=None):
     app.register_blueprint(auth)
     app.register_blueprint(dashboard)
     app.register_blueprint(gestion)
+    app.register_blueprint(inventario)
     return app

@@ -25,6 +25,7 @@
         <div class="user-menu">
             {% if session.get('rol') == 'Administrador' %}<a class="text-action" href="{{ url_for('gestion.ventanilla') }}">Ventanilla</a>{% endif %}
             {% if session.get('rol') == 'Administrador' %}<a class="text-action" href="{{ url_for('gestion.usuarios') }}">Usuarios</a>{% endif %}
+            {% if session.get('rol') == 'Administrador' %}<a class="text-action" href="{{ url_for('inventario.listar', recurso='clientes') }}">Inventario y servicios</a>{% endif %}
             <form action="{{ url_for('auth.logout') }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout-button" type="submit">Cerrar sesión</button></form>
         </div>
     </header>

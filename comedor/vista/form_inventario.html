@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Editar' if registro else 'Agregar' }} {{ configuracion.singular }} | Comedor UNMSM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page admin-page bootstrap-dashboard admin-bootstrap">
+    <header class="navbar navbar-dark sticky-top bg-dark p-0 shadow">
+        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 comedor-navbar-brand" href="{{ url_for('inventario.listar', recurso=recurso) }}">Comedor <strong>UNMSM</strong></a>
+        <div class="navbar-account ms-auto d-flex align-items-center gap-3 px-3">
+            <span class="navbar-greeting">Hola, <strong>{{ session.get('nombres', 'Administrador') }}</strong></span>
+            <form action="{{ url_for('auth.logout') }}" method="POST" class="m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-light btn-sm" type="submit">Cerrar sesión</button></form>
+        </div>
+    </header>
+    <main class="container py-4 inventory-form-main">
+        <a class="inventory-back-link" href="{{ url_for('inventario.listar', recurso=recurso) }}">← Volver a {{ configuracion.titulo|lower }}</a>
+        <section class="inventory-form-card">
+            <p class="eyebrow">PANEL DE ADMINISTRACIÓN · ETAPA 5</p>
+            <h1>{{ 'Editar' if registro else 'Agregar' }} {{ configuracion.singular }}</h1>
+            <p class="inventory-form-intro">{{ configuracion.descripcion }}</p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}<div class="alerts" role="status" aria-live="polite">{% for category, message in messages %}<div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+            {% endwith %}
+            {% if recurso == 'clientes' and not opciones.get('usuario_id') %}
+                <div class="inventory-hint">No hay estudiantes disponibles para vincular. Primero crea una cuenta con rol Estudiante desde <a href="{{ url_for('gestion.nuevo_usuario') }}">Gestión de usuarios</a>.</div>
+            {% endif %}
+            {% if recurso == 'mercaderia' and not opciones.get('insumo_id') %}
+                <div class="inventory-hint">Primero debes registrar un <a href="{{ url_for('inventario.crear', recurso='insumos') }}">insumo</a> para poder crear un movimiento.</div>
+            {% else %}
+                <form method="POST" class="inventory-form" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% for campo in configuracion.campos %}
+                        {% set valor = valores.get(campo.nombre, '') %}
+                        {% set opciones_campo = opciones.get(campo.nombre, []) %}
+                        {% if campo.tipo == 'checkbox' %}
+                            <div class="form-check inventory-checkbox">
+                                <input class="form-check-input" type="checkbox" id="{{ campo.nombre }}" name="{{ campo.nombre }}" value="1" {% if valor in (True, 1, '1', 'on', 'true') %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ campo.nombre }}">{{ campo.etiqueta }}</label>
+                            </div>
+                        {% else %}
+                            <div class="mb-3">
+                                <label class="form-label" for="{{ campo.nombre }}">{{ campo.etiqueta }}{% if campo.requerido %} <span aria-hidden="true">*</span>{% endif %}</label>
+                                {% if campo.tipo == 'select' %}
+                                    <select class="form-select" id="{{ campo.nombre }}" name="{{ campo.nombre }}" {% if campo.requerido %}required{% endif %}>
+                                        {% if not campo.requerido %}<option value="">Sin seleccionar</option>{% endif %}
+                                        {% for opcion_valor, opcion_texto in opciones_campo %}<option value="{{ opcion_valor }}" {% if valor|string == opcion_valor|string %}selected{% endif %}>{{ opcion_texto }}</option>{% endfor %}
+                                    </select>
+                                    {% if not opciones_campo and campo.requerido %}<small class="inventory-muted">No hay opciones disponibles para este campo todavía.</small>{% endif %}
+                                {% elif campo.tipo == 'textarea' %}
+                                    <textarea class="form-control" id="{{ campo.nombre }}" name="{{ campo.nombre }}" rows="3" maxlength="{{ campo.maximo or 1000 }}" {% if campo.requerido %}required{% endif %}>{{ valor or '' }}</textarea>
+                                {% else %}
+                                    <input class="form-control" type="{{ campo.tipo }}" id="{{ campo.nombre }}" name="{{ campo.nombre }}" value="{{ valor if valor is not none else '' }}" {% if campo.requerido %}required{% endif %}{% if campo.maximo and campo.tipo not in ('number', 'date', 'time') %} maxlength="{{ campo.maximo }}"{% endif %}{% if campo.minimo is defined %} min="{{ campo.minimo }}"{% endif %}{% if campo.paso is defined %} step="{{ campo.paso }}"{% endif %}>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                    <div class="inventory-form-actions">
+                        <button class="admin-add-button" type="submit">{{ 'Guardar cambios' if registro else 'Crear registro' }}</button>
+                        <a class="admin-edit-button" href="{{ url_for('inventario.listar', recurso=recurso) }}">Cancelar</a>
+                    </div>
+                </form>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
