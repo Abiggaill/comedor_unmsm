@@ -49,6 +49,20 @@ class Reserva:
             ).fetchone()
 
     @staticmethod
+    def historial_usuario(usuario_id):
+        with db.connection() as conn:
+            return conn.execute(
+                """SELECT r.id, r.estado, r.codigo_qr, r.finalizada,
+                          r.entrada_elegida, r.segundo_elegido,
+                          r.postre_bebida_elegido, m.fecha
+                   FROM reservas r
+                   JOIN menus m ON m.id = r.menu_id
+                   WHERE r.usuario_id = ?
+                   ORDER BY r.id DESC""",
+                (usuario_id,),
+            ).fetchall()
+
+    @staticmethod
     def crear(usuario_id, menu_id, codigo_qr, entrada, segundo, postre_bebida):
         menu_actual = Menu.obtener_del_dia()
         if not menu_actual or menu_actual["id"] != menu_id:

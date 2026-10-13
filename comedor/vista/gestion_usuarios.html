@@ -3,36 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Roles de usuario | Comedor UNMSM</title>
+    <title>Usuarios | Comedor UNMSM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="dashboard-page">
-    <header class="site-header">
-        <a class="brand" href="{{ url_for('gestion.usuarios') }}"><span class="brand-mark">U</span><span>Comedor <strong>UNMSM</strong></span></a>
-        <div class="user-menu"><a class="text-action" href="{{ url_for('gestion.menu') }}">Gestión del menú</a><a class="text-action" href="{{ url_for('gestion.ventanilla') }}">Ventanilla</a><form action="{{ url_for('auth.logout') }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="logout-button" type="submit">Cerrar sesión</button></form></div>
+<!-- Estructura base adaptada del ejemplo oficial Dashboard de Bootstrap 5.3. -->
+<body class="dashboard-page admin-page bootstrap-dashboard admin-bootstrap">
+    <header class="navbar navbar-dark sticky-top bg-dark p-0 shadow">
+        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 comedor-navbar-brand" href="{{ url_for('gestion.usuarios') }}">Comedor <strong>UNMSM</strong></a>
+        <button class="navbar-toggler d-md-none collapsed me-3" type="button" data-bs-toggle="collapse" data-bs-target="#adminSidebar" aria-controls="adminSidebar" aria-expanded="false" aria-label="Mostrar menú"><span class="navbar-toggler-icon"></span></button>
+        <div class="navbar-account ms-auto d-flex align-items-center gap-3 px-3">
+            <span class="navbar-greeting">Hola, <strong>{{ session.get('nombres', 'Administrador') }}</strong></span>
+            <form action="{{ url_for('auth.logout') }}" method="POST" class="m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-light btn-sm" type="submit">Cerrar sesión</button></form>
+        </div>
     </header>
-    <main class="dashboard-main">
-        <section class="dashboard-intro"><p class="eyebrow">SOLO ADMINISTRACIÓN</p><h1>Roles de usuario</h1><p>Asigna acceso únicamente al personal autorizado.</p></section>
-        {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}<div class="alerts" role="status" aria-live="polite">{% for category, message in messages %}<div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>{% endfor %}</div>{% endif %}{% endwith %}
-        <section class="dashboard-card staff-card">
-            {% if usuarios %}
-                <div class="staff-user-list">
-                    {% for usuario in usuarios %}
-                        <article class="staff-user-row">
-                            <div><strong>{{ usuario.nombres }}</strong><span>{{ usuario.correo }}</span><small>Rol actual: {{ usuario.rol }}</small></div>
-                            <form method="POST" action="{{ url_for('gestion.usuarios') }}" class="role-form">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
-                                <label class="visually-hidden" for="rol-{{ usuario.id }}">Nuevo rol para {{ usuario.nombres }}</label>
-                                <select id="rol-{{ usuario.id }}" name="rol">{% for rol in roles %}<option value="{{ rol }}" {% if rol == usuario.rol %}selected{% endif %}>{{ rol }}</option>{% endfor %}</select>
-                                <button class="btn-secondary" type="submit">Guardar rol</button>
-                            </form>
-                        </article>
+
+    <div class="container-fluid"><div class="row">
+        <nav id="adminSidebar" class="col-md-3 col-lg-2 d-md-block bg-white sidebar collapse">
+            <div class="position-sticky pt-3 sidebar-inner">
+                <p class="sidebar-heading">ADMINISTRACIÓN</p>
+                <ul class="nav flex-column gap-1">
+                    <li class="nav-item"><a class="nav-link active" href="{{ url_for('gestion.usuarios') }}" aria-current="page"><span aria-hidden="true">♙</span> Usuarios</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('gestion.menu') }}"><span aria-hidden="true">🍽</span> Gestión del menú</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('gestion.ventanilla') }}"><span aria-hidden="true">✓</span> Ventanilla</a></li>
+                </ul>
+            </div>
+        </nav>
+
+    <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4 admin-main">
+        <section class="admin-welcome">
+            <div>
+                <p class="eyebrow">PANEL DE ADMINISTRACIÓN</p>
+                <h1>Gestión de usuarios</h1>
+                <p>Consulta las cuentas, actualiza sus datos y administra sus permisos.</p>
+            </div>
+            <a class="admin-add-button" href="{{ url_for('gestion.nuevo_usuario') }}"><span aria-hidden="true">＋</span> Crear usuario</a>
+        </section>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="alerts" role="status" aria-live="polite">
+                    {% for category, message in messages %}
+                        <div class="alert {{ 'success' if category == 'success' else '' }}">{{ message }}</div>
                     {% endfor %}
                 </div>
-            {% else %}<p>Aún no hay cuentas registradas.</p>{% endif %}
+            {% endif %}
+        {% endwith %}
+
+        <section class="admin-stats" aria-label="Resumen de cuentas">
+            <article class="admin-stat-card"><span class="admin-stat-icon">U</span><div><span class="admin-stat-label">Cuentas registradas</span><strong>{{ total_usuarios }}</strong></div></article>
+            <article class="admin-stat-card"><span class="admin-stat-icon student">E</span><div><span class="admin-stat-label">Estudiantes</span><strong>{{ total_estudiantes }}</strong></div></article>
+            <article class="admin-stat-card"><span class="admin-stat-icon staff">P</span><div><span class="admin-stat-label">Personal y administradores</span><strong>{{ total_personal }}</strong></div></article>
         </section>
+
+        <section class="admin-table-card">
+            <div class="admin-table-heading">
+                <div><h2>Directorio de cuentas</h2><p>Los cambios de rol afectan los permisos de la cuenta.</p></div>
+                <label class="admin-search"><span aria-hidden="true">⌕</span><span class="visually-hidden">Buscar usuario</span><input id="user-search" type="search" placeholder="Buscar por nombre, DNI o correo" autocomplete="off"></label>
+            </div>
+
+            {% if usuarios %}
+                <div class="admin-table-wrap">
+                    <table class="table table-hover align-middle admin-user-table" id="users-table">
+                        <thead><tr><th scope="col">Usuario</th><th scope="col">DNI / código</th><th scope="col">Rol</th><th scope="col">Reservas</th><th scope="col"><span class="visually-hidden">Acciones</span></th></tr></thead>
+                        <tbody>
+                            {% for usuario in usuarios %}
+                                <tr data-user-row data-search="{{ (usuario.nombres ~ ' ' ~ usuario.correo ~ ' ' ~ usuario.dni)|lower }}" data-role="{{ usuario.rol }}">
+                                    <td><div class="admin-user-cell"><span class="user-avatar" aria-hidden="true">{{ usuario.nombres[:1]|upper }}</span><span><strong>{{ usuario.nombres }}</strong><small>{{ usuario.correo }}</small></span></div></td>
+                                    <td>{{ usuario.dni }}</td>
+                                    <td><span class="role-pill role-{{ usuario.rol|lower }}">{{ usuario.rol }}</span></td>
+                                    <td>{{ usuario.total_reservas }}</td>
+                                    <td><div class="admin-row-actions">
+                                        <a class="admin-edit-button" href="{{ url_for('gestion.editar_usuario', usuario_id=usuario.id) }}">Editar</a>
+                                        {% if usuario.id != current_user_id %}
+                                            <form action="{{ url_for('gestion.eliminar_usuario', usuario_id=usuario.id) }}" method="POST" onsubmit="return confirm('¿Eliminar esta cuenta? Las cuentas con reservas o que sean el último administrador se conservarán.');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button class="admin-delete-button" type="submit">Eliminar</button>
+                                            </form>
+                                        {% else %}<span class="you-label">Tu cuenta</span>{% endif %}
+                                    </div></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <p class="admin-no-results" id="no-results" hidden>No encontramos cuentas que coincidan con esa búsqueda.</p>
+                <p class="admin-table-footnote">Las cuentas con reservas conservan su historial y no se pueden eliminar.</p>
+            {% else %}
+                <div class="admin-empty-state"><span aria-hidden="true">◎</span><h3>Aún no hay cuentas</h3><p>Crea la primera cuenta desde el botón “Crear usuario”.</p></div>
+            {% endif %}
+        </section>
+
         <footer class="dashboard-footer">Universidad Nacional Mayor de San Marcos</footer>
     </main>
+    </div></div>
+    <script>
+        const searchInput = document.getElementById("user-search");
+        if (searchInput) {
+            const normalizeText = (value) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            searchInput.addEventListener("input", () => {
+                const query = normalizeText(searchInput.value.trim());
+                const rows = [...document.querySelectorAll("[data-user-row]")];
+                let visible = 0;
+                rows.forEach((row) => {
+                    const match = normalizeText(row.dataset.search).includes(query) || normalizeText(row.dataset.role).includes(query);
+                    row.hidden = !match;
+                    if (match) visible += 1;
+                });
+                document.getElementById("no-results").hidden = visible !== 0;
+            });
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 </body>
 </html>

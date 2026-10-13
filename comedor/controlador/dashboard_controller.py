@@ -19,6 +19,7 @@ dashboard = Blueprint("dashboard", __name__)
 def inicio():
     menu = Menu.obtener_del_dia()
     reserva = Reserva.buscar_por_usuario_y_menu(session["user_id"], menu["id"]) if menu else None
+    historial = Reserva.historial_usuario(session["user_id"])
     qr_data_uri = None
     if reserva and reserva["estado"] == "Reservado" and (
         not reserva["finalizada"] or request.args.get("ver_ticket") == "1"
@@ -39,6 +40,9 @@ def inicio():
         opciones=Menu.opciones(menu) if menu else None,
         mostrar_ticket=request.args.get("ver_ticket") == "1",
         qr_data_uri=qr_data_uri,
+        historial=historial,
+        reservas_activas=sum(item["estado"] == "Reservado" for item in historial),
+        reservas_entregadas=sum(item["estado"] == "ENTREGADO" for item in historial),
     )
 
 
