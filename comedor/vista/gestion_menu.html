@@ -1,3 +1,16 @@
+{% macro control_foto(campo, texto, valor, configurado) %}
+    <div class="menu-photo-control">
+        <input type="hidden" name="{{ campo }}" id="{{ campo }}" value="{{ valor or '' }}">
+        <div class="menu-photo-preview" id="preview-{{ campo }}">
+            {% if valor %}<img src="{{ valor }}" alt="Foto actual de {{ texto }}">{% else %}<span aria-hidden="true">🍽️</span><small>Sin foto</small>{% endif %}
+        </div>
+        <div class="menu-photo-actions">
+            <button class="photo-upload-button" type="button" data-photo-field="{{ campo }}" {% if not configurado %}disabled{% endif %}>Subir {{ texto|lower }}</button>
+            <button class="photo-clear-button" type="button" data-clear-photo="{{ campo }}" {% if not valor %}disabled{% endif %}>Quitar</button>
+        </div>
+        <small class="photo-upload-status" id="status-{{ campo }}" role="status" aria-live="polite"></small>
+    </div>
+{%- endmacro -%}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -23,17 +36,92 @@
                 <div class="form-group"><label for="fecha-buscar">Fecha del menú</label><input id="fecha-buscar" type="date" name="fecha" value="{{ fecha }}" required></div>
                 <button class="btn-secondary" type="submit">Ver fecha</button>
             </form>
-            <form method="POST" action="{{ url_for('gestion.menu') }}">
+            <form method="POST" action="{{ url_for('gestion.menu') }}" class="menu-management-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="fecha" value="{{ fecha }}">
-                <div class="form-group"><label for="entrada">Entrada</label><input id="entrada" name="entrada" maxlength="500" value="{{ menu.entrada if menu else '' }}" placeholder="Ej.: Sopa / ensalada" required></div>
-                <div class="form-group"><label for="segundo">Segundo</label><input id="segundo" name="segundo" maxlength="500" value="{{ menu.segundo if menu else '' }}" placeholder="Ej.: Pollo guisado / opción vegetariana" required></div>
-                <div class="form-group"><label for="postre-bebida">Postre o bebida</label><input id="postre-bebida" name="postre_bebida" maxlength="500" value="{{ menu.postre_bebida if menu else '' }}" placeholder="Ej.: Fruta / refresco" required></div>
+                {% if not cloudinary_configured %}<div class="alert">Para subir fotos, falta conectar el almacenamiento de imágenes. Por ahora puedes guardar el menú y completar esta configuración después.</div>{% endif %}
+                <div class="menu-dish-group">
+                    <div class="form-group"><label for="entrada">Entrada</label><input id="entrada" name="entrada" maxlength="500" value="{{ menu.entrada if menu else '' }}" placeholder="Ej.: Sopa criolla / causa rellena" required><small class="field-help">Escribe las dos opciones separadas por /; la foto 1 corresponde al primer plato.</small></div>
+                    <div class="menu-photo-grid">
+                        {{ control_foto('entrada_imagen_1', 'foto entrada opción 1', menu.entrada_imagen_1 if menu else '', cloudinary_configured) }}
+                        {{ control_foto('entrada_imagen_2', 'foto entrada opción 2', menu.entrada_imagen_2 if menu else '', cloudinary_configured) }}
+                    </div>
+                </div>
+                <div class="menu-dish-group">
+                    <div class="form-group"><label for="segundo">Segundo</label><input id="segundo" name="segundo" maxlength="500" value="{{ menu.segundo if menu else '' }}" placeholder="Ej.: Arroz con pollo / tallarines verdes" required><small class="field-help">La foto 1 corresponde a la primera opción y la foto 2 a la segunda.</small></div>
+                    <div class="menu-photo-grid">
+                        {{ control_foto('segundo_imagen_1', 'foto segundo opción 1', menu.segundo_imagen_1 if menu else '', cloudinary_configured) }}
+                        {{ control_foto('segundo_imagen_2', 'foto segundo opción 2', menu.segundo_imagen_2 if menu else '', cloudinary_configured) }}
+                    </div>
+                </div>
+                <div class="menu-dish-group">
+                    <div class="form-group"><label for="postre-bebida">Postre o bebida</label><input id="postre-bebida" name="postre_bebida" maxlength="500" value="{{ menu.postre_bebida if menu else '' }}" placeholder="Ej.: Fruta / refresco" required><small class="field-help">Si hay dos opciones, agrega también sus fotos.</small></div>
+                    <div class="menu-photo-grid">
+                        {{ control_foto('postre_bebida_imagen_1', 'foto postre o bebida opción 1', menu.postre_bebida_imagen_1 if menu else '', cloudinary_configured) }}
+                        {{ control_foto('postre_bebida_imagen_2', 'foto postre o bebida opción 2', menu.postre_bebida_imagen_2 if menu else '', cloudinary_configured) }}
+                    </div>
+                </div>
                 <div class="form-group"><label for="cupos">Cupos totales del día</label><input id="cupos" name="cupos_totales" type="number" min="1" max="100000" value="{{ cupos_totales }}" required><small class="field-help">Reservas registradas para esta fecha: {{ reservadas }}. Al guardar, esos cupos se descuentan automáticamente.</small></div>
                 <button class="btn-primary" type="submit">Guardar menú</button>
             </form>
         </section>
         <footer class="dashboard-footer">Universidad Nacional Mayor de San Marcos</footer>
     </main>
+    <script>
+        const photoUploadUrl = {{ url_for('gestion.subir_imagen_menu')|tojson }};
+        const csrfToken = {{ csrf_token()|tojson }};
+        document.querySelectorAll("[data-photo-field]").forEach((button) => {
+            const field = button.dataset.photoField;
+            const picker = document.createElement("input");
+            picker.type = "file";
+            picker.accept = "image/jpeg,image/png,image/webp";
+            picker.hidden = true;
+            button.after(picker);
+            button.addEventListener("click", () => picker.click());
+            picker.addEventListener("change", async () => {
+                const file = picker.files[0];
+                if (!file) return;
+                const status = document.getElementById(`status-${field}`);
+                if (file.size > 5 * 1024 * 1024) {
+                    status.textContent = "La foto debe pesar como máximo 5 MB.";
+                    picker.value = "";
+                    return;
+                }
+                const payload = new FormData();
+                payload.append("imagen", file);
+                payload.append("csrf_token", csrfToken);
+                button.disabled = true;
+                status.textContent = "Subiendo foto…";
+                try {
+                    const response = await fetch(photoUploadUrl, { method: "POST", body: payload });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || "No se pudo subir la foto.");
+                    document.getElementById(field).value = result.url;
+                    const preview = document.getElementById(`preview-${field}`);
+                    preview.replaceChildren();
+                    const image = document.createElement("img");
+                    image.src = result.url;
+                    image.alt = "Vista previa del plato";
+                    preview.append(image);
+                    document.querySelector(`[data-clear-photo="${field}"]`).disabled = false;
+                    status.textContent = "Foto lista. Guarda el menú para publicarla.";
+                } catch (error) {
+                    status.textContent = error.message;
+                } finally {
+                    button.disabled = false;
+                    picker.value = "";
+                }
+            });
+        });
+        document.querySelectorAll("[data-clear-photo]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const field = button.dataset.clearPhoto;
+                document.getElementById(field).value = "";
+                document.getElementById(`preview-${field}`).innerHTML = '<span aria-hidden="true">🍽️</span><small>Sin foto</small>';
+                document.getElementById(`status-${field}`).textContent = "La foto se quitará al guardar el menú.";
+                button.disabled = true;
+            });
+        });
+    </script>
 </body>
 </html>

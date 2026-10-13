@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask
 from flask_wtf.csrf import CSRFProtect
 
@@ -15,6 +16,7 @@ from .modelo.schema import initialize_schema
 def create_app(test_config=None):
     package_root = Path(__file__).resolve().parent
     project_root = package_root.parent
+    load_dotenv(project_root / ".env", override=False)
     app = Flask(
         __name__,
         template_folder=str(package_root / "vista"),
@@ -29,6 +31,10 @@ def create_app(test_config=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
+        CLOUDINARY_CLOUD_NAME=os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip(),
+        CLOUDINARY_API_KEY=os.environ.get("CLOUDINARY_API_KEY", "").strip(),
+        CLOUDINARY_API_SECRET=os.environ.get("CLOUDINARY_API_SECRET", "").strip(),
+        MAX_CONTENT_LENGTH=5 * 1024 * 1024 + 256 * 1024,
     )
     if test_config:
         app.config.update(test_config)

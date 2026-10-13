@@ -52,7 +52,8 @@
             {% endif %}
         {% endwith %}
 
-        <section id="menu-del-dia" aria-label="Menú y reserva actual">
+        <div class="row g-4 student-overview-row">
+        <section id="menu-del-dia" class="col-xl-8" aria-label="Menú y reserva actual">
         {% if reserva %}
             {% if reserva.estado == 'ENTREGADO' %}
                 <section class="dashboard-card completed-card">
@@ -136,7 +137,11 @@
                             {% for opcion in opciones.entrada %}
                                 <label class="choice-option">
                                     <input type="radio" name="entrada" value="{{ opcion }}" required>
-                                    <span>{{ opcion }}</span>
+                                    <span class="choice-option-content">
+                                        {% set foto = imagen_opcion(menu, 'entrada', loop.index) %}
+                                        {% if foto %}<img class="dish-choice-image" src="{{ foto }}" alt="Foto de {{ opcion }}" loading="lazy">{% else %}<span class="dish-image-placeholder" aria-hidden="true">🍲</span>{% endif %}
+                                        <strong>{{ opcion }}</strong>
+                                    </span>
                                 </label>
                             {% endfor %}
                         </div>
@@ -148,7 +153,11 @@
                             {% for opcion in opciones.segundo %}
                                 <label class="choice-option">
                                     <input type="radio" name="segundo" value="{{ opcion }}" required>
-                                    <span>{{ opcion }}</span>
+                                    <span class="choice-option-content">
+                                        {% set foto = imagen_opcion(menu, 'segundo', loop.index) %}
+                                        {% if foto %}<img class="dish-choice-image" src="{{ foto }}" alt="Foto de {{ opcion }}" loading="lazy">{% else %}<span class="dish-image-placeholder" aria-hidden="true">🍛</span>{% endif %}
+                                        <strong>{{ opcion }}</strong>
+                                    </span>
                                 </label>
                             {% endfor %}
                         </div>
@@ -160,7 +169,11 @@
                             {% for opcion in opciones.postre_bebida %}
                                 <label class="choice-option">
                                     <input type="radio" name="postre_bebida" value="{{ opcion }}">
-                                    <span>{{ opcion }}</span>
+                                    <span class="choice-option-content">
+                                        {% set foto = imagen_opcion(menu, 'postre_bebida', loop.index) %}
+                                        {% if foto %}<img class="dish-choice-image" src="{{ foto }}" alt="Foto de {{ opcion }}" loading="lazy">{% else %}<span class="dish-image-placeholder" aria-hidden="true">🥤</span>{% endif %}
+                                        <strong>{{ opcion }}</strong>
+                                    </span>
                                 </label>
                             {% endfor %}
                             <label class="choice-option optional-choice">
@@ -188,6 +201,44 @@
             </section>
         {% endif %}
         </section>
+
+        <aside class="col-xl-4 student-side-column" aria-label="Resumen de mi actividad">
+            <section class="student-stats-card">
+                <p class="eyebrow">MI COMEDOR</p>
+                <h2>Mi actividad</h2>
+                <p class="student-stats-caption">Un resumen rápido de tus reservas.</p>
+                <div class="student-stat-item">
+                    <span class="student-stat-icon" aria-hidden="true">▤</span>
+                    <span><strong>{{ historial|length }}</strong><small>Reservas realizadas</small></span>
+                </div>
+                <div class="student-stat-item">
+                    <span class="student-stat-icon pending-icon" aria-hidden="true">◷</span>
+                    <span><strong>{{ reservas_activas }}</strong><small>Pendientes de entrega</small></span>
+                </div>
+                <div class="student-stat-item">
+                    <span class="student-stat-icon delivered-icon" aria-hidden="true">✓</span>
+                    <span><strong>{{ reservas_entregadas }}</strong><small>Menús entregados</small></span>
+                </div>
+            </section>
+
+            <section class="student-today-card">
+                <span class="student-today-icon" aria-hidden="true">🍽️</span>
+                <p class="eyebrow">HOY EN EL COMEDOR</p>
+                {% if menu %}
+                    <h3>{{ menu.cupos_disponibles }} cupos disponibles</h3>
+                    {% if reserva %}
+                        <p>Tu reserva de hoy: <strong>{{ reserva.estado|capitalize }}</strong>.</p>
+                    {% else %}
+                        <p>Elige tus platos y confirma tu reserva desde el menú del día.</p>
+                    {% endif %}
+                {% else %}
+                    <h3>Menú por publicar</h3>
+                    <p>Cuando se publique el menú podrás revisar las opciones aquí.</p>
+                {% endif %}
+                <a href="#menu-del-dia" class="student-today-link">Ir al menú <span aria-hidden="true">→</span></a>
+            </section>
+        </aside>
+        </div>
 
         <section class="history-section" id="historial" aria-labelledby="history-title">
             <div class="history-heading">

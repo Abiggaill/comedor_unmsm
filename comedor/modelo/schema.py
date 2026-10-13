@@ -40,6 +40,29 @@ def initialize_schema():
         if db.is_postgres:
             rows = conn.execute(
                 "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = 'menus'"
+            ).fetchall()
+            menu_columns = {row["column_name"] for row in rows}
+        else:
+            menu_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(menus)")
+            }
+
+        menu_image_columns = (
+            "entrada_imagen_1",
+            "entrada_imagen_2",
+            "segundo_imagen_1",
+            "segundo_imagen_2",
+            "postre_bebida_imagen_1",
+            "postre_bebida_imagen_2",
+        )
+        for column in menu_image_columns:
+            if column not in menu_columns:
+                conn.execute(f"ALTER TABLE menus ADD COLUMN {column} TEXT")
+
+        if db.is_postgres:
+            rows = conn.execute(
+                "SELECT column_name FROM information_schema.columns "
                 "WHERE table_schema = current_schema() AND table_name = 'reservas'"
             ).fetchall()
             reservation_columns = {row["column_name"] for row in rows}

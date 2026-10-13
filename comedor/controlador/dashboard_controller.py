@@ -38,6 +38,7 @@ def inicio():
         menu=menu,
         reserva=reserva,
         opciones=Menu.opciones(menu) if menu else None,
+        imagen_opcion=Menu.imagen_opcion,
         mostrar_ticket=request.args.get("ver_ticket") == "1",
         qr_data_uri=qr_data_uri,
         historial=historial,

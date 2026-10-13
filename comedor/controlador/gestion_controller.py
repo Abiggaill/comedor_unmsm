@@ -1,8 +1,9 @@
 """Staff ticket validation and menu/account administration."""
 
 from datetime import date
+from urllib.parse import urlparse
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 
 from ..modelo.database import db
 from ..modelo.menu import Menu
@@ -12,6 +13,55 @@ from .auth_controller import role_required
 
 
 gestion = Blueprint("gestion", __name__)
+MAX_MENU_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+@gestion.route("/gestion/menu/subir-imagen", methods=["POST"])
+@role_required("Nutricionista", "Administrador")
+def subir_imagen_menu():
+    cloud_name = current_app.config.get("CLOUDINARY_CLOUD_NAME")
+    api_key = current_app.config.get("CLOUDINARY_API_KEY")
+    api_secret = current_app.config.get("CLOUDINARY_API_SECRET")
+    if not all((cloud_name, api_key, api_secret)):
+        return jsonify(error="Falta configurar el almacenamiento de fotos."), 503
+
+    archivo = request.files.get("imagen")
+    if not archivo or not archivo.filename:
+        return jsonify(error="Selecciona una imagen desde tu computadora."), 400
+    if request.content_length and request.content_length > MAX_MENU_IMAGE_SIZE + 256 * 1024:
+        return jsonify(error="La foto debe pesar como máximo 5 MB."), 413
+
+    contenido = archivo.stream.read(MAX_MENU_IMAGE_SIZE + 1)
+    if len(contenido) > MAX_MENU_IMAGE_SIZE:
+        return jsonify(error="La foto debe pesar como máximo 5 MB."), 413
+    es_jpeg = contenido.startswith(b"\xff\xd8\xff")
+    es_png = contenido.startswith(b"\x89PNG\r\n\x1a\n")
+    es_webp = contenido.startswith(b"RIFF") and contenido[8:12] == b"WEBP"
+    if not (es_jpeg or es_png or es_webp):
+        return jsonify(error="Usa una foto JPG, PNG o WebP."), 400
+
+    try:
+        import cloudinary
+        import cloudinary.uploader
+
+        cloudinary.config(
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret,
+            secure=True,
+        )
+        archivo.stream.seek(0)
+        resultado = cloudinary.uploader.upload(
+            archivo.stream,
+            folder="comedor_unmsm/menus",
+            resource_type="image",
+            allowed_formats=["jpg", "jpeg", "png", "webp"],
+            transformation=[{"width": 1200, "height": 900, "crop": "limit", "quality": "auto", "fetch_format": "auto"}],
+        )
+        return jsonify(url=resultado["secure_url"])
+    except Exception:
+        current_app.logger.exception("No se pudo subir la imagen del menú a Cloudinary")
+        return jsonify(error="No se pudo subir la foto. Inténtalo nuevamente."), 502
 
 
 @gestion.route("/ventanilla", methods=["GET", "POST"])
@@ -33,6 +83,7 @@ def ventanilla():
 @role_required("Nutricionista", "Administrador")
 def menu():
     fecha = request.values.get("fecha", "").strip() or Menu.fecha_actual()
+    datos_formulario = {}
     try:
         date.fromisoformat(fecha)
     except ValueError:
@@ -43,6 +94,7 @@ def menu():
         entrada = request.form.get("entrada", "").strip()
         segundo = request.form.get("segundo", "").strip()
         postre_bebida = request.form.get("postre_bebida", "").strip()
+        imagenes = {campo: request.form.get(campo, "").strip() for campo in Menu.CAMPOS_IMAGEN}
         try:
             cupos_totales = int(request.form.get("cupos_totales", ""))
         except ValueError:
@@ -54,12 +106,31 @@ def menu():
             flash("Completa las opciones de entrada, segundo y postre o bebida.", "error")
         elif len(entrada) > 500 or len(segundo) > 500 or len(postre_bebida) > 500:
             flash("Cada campo del menú debe tener como máximo 500 caracteres.", "error")
+        elif any(
+            url
+            and (
+                len(url) > 2048
+                or urlparse(url).scheme != "https"
+                or urlparse(url).hostname != "res.cloudinary.com"
+                or len(urlparse(url).path.strip("/").split("/")) < 4
+                or urlparse(url).path.strip("/").split("/")[1:3] != ["image", "upload"]
+            )
+            for url in imagenes.values()
+        ):
+            flash("Usa las fotos subidas desde el botón de Cloudinary.", "error")
         elif not 1 <= cupos_totales <= 100000:
             flash("Ingresa un total de cupos entre 1 y 100000.", "error")
         else:
             try:
-                Menu.guardar(fecha, entrada, segundo, postre_bebida, cupos_totales)
+                fotos_retiradas = Menu.guardar(
+                    fecha, entrada, segundo, postre_bebida, cupos_totales, imagenes
+                )
                 flash("El menú y sus cupos quedaron guardados.", "success")
+                if fotos_retiradas:
+                    flash(
+                        "Quitamos la foto de cada plato cuyo nombre cambió. Sube la foto nueva para que corresponda al menú.",
+                        "error",
+                    )
                 return redirect(url_for("gestion.menu", fecha=fecha))
             except ValueError as error:
                 flash(str(error), "error")
@@ -68,12 +139,28 @@ def menu():
     cupos_totales = (
         menu_existente["cupos_disponibles"] + reservadas if menu_existente else 100
     )
+    if request.method == "POST":
+        datos_formulario = {
+            "entrada": request.form.get("entrada", "").strip(),
+            "segundo": request.form.get("segundo", "").strip(),
+            "postre_bebida": request.form.get("postre_bebida", "").strip(),
+            **{campo: request.form.get(campo, "").strip() for campo in Menu.CAMPOS_IMAGEN},
+        }
+        try:
+            cupos_totales = int(request.form.get("cupos_totales", cupos_totales))
+        except ValueError:
+            pass
     return render_template(
         "gestion_menu.html",
         fecha=fecha,
         menu=menu_existente,
         cupos_totales=cupos_totales,
         reservadas=reservadas,
+        datos_formulario=datos_formulario,
+        cloudinary_configured=all(
+            current_app.config.get(variable)
+            for variable in ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET")
+        ),
     )
 
 
