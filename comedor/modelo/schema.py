@@ -173,6 +173,10 @@ def initialize_schema():
                    FROM usuarios AS u
                    WHERE u.rol = 'Estudiante'
                      AND NOT EXISTS (
+                         SELECT 1 FROM clientes AS demo
+                         WHERE demo.telefono = '999000002'
+                     )
+                     AND NOT EXISTS (
                          SELECT 1 FROM clientes AS c WHERE c.usuario_id = u.id
                      )
                    ORDER BY u.id
