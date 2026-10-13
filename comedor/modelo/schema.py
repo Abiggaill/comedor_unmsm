@@ -31,10 +31,85 @@ def initialize_schema():
                 FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
                 FOREIGN KEY (menu_id) REFERENCES menus (id))"""
         )
+        # Stage 5: purchasing, inventory, catalog, dining-service and client tables.
+        # A client is linked to an existing user account to avoid duplicating
+        # login details or storing a second password.
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS clientes (
+                id {id_type}, usuario_id BIGINT NOT NULL UNIQUE,
+                telefono TEXT, activo {bool_type},
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS proveedores (
+                id {id_type}, ruc TEXT UNIQUE, razon_social TEXT NOT NULL,
+                nombre_contacto TEXT, telefono TEXT, correo TEXT, direccion TEXT,
+                activo {bool_type},
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS productos (
+                id {id_type}, nombre TEXT NOT NULL, categoria TEXT,
+                descripcion TEXT, imagen_url TEXT, activo {bool_type},
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (nombre, categoria))"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS insumos (
+                id {id_type}, nombre TEXT NOT NULL UNIQUE,
+                unidad_medida TEXT NOT NULL,
+                stock_minimo NUMERIC(12, 3) NOT NULL DEFAULT 0
+                    CHECK (stock_minimo >= 0),
+                activo {bool_type},
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"""
+        )
+        # Inventory is recorded as movements so that deliveries and use of
+        # ingredients can be traced instead of silently overwriting stock.
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS mercaderia (
+                id {id_type}, insumo_id BIGINT NOT NULL,
+                proveedor_id BIGINT, tipo_movimiento TEXT NOT NULL
+                    CHECK (tipo_movimiento IN ('ENTRADA', 'SALIDA', 'AJUSTE')),
+                cantidad NUMERIC(12, 3) NOT NULL CHECK (cantidad > 0),
+                costo_unitario NUMERIC(12, 2) CHECK (costo_unitario IS NULL OR costo_unitario >= 0),
+                lote TEXT, fecha_vencimiento DATE,
+                registrado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                observacion TEXT,
+                FOREIGN KEY (insumo_id) REFERENCES insumos (id) ON DELETE RESTRICT,
+                FOREIGN KEY (proveedor_id) REFERENCES proveedores (id) ON DELETE RESTRICT)"""
+        )
+        # A dish can use several ingredients, and an ingredient can be used
+        # by several dishes; this junction stores the recipe quantities.
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS producto_insumos (
+                producto_id BIGINT NOT NULL, insumo_id BIGINT NOT NULL,
+                cantidad NUMERIC(12, 3) NOT NULL CHECK (cantidad > 0),
+                unidad_medida TEXT NOT NULL,
+                PRIMARY KEY (producto_id, insumo_id),
+                FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE CASCADE,
+                FOREIGN KEY (insumo_id) REFERENCES insumos (id) ON DELETE RESTRICT)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS servicios (
+                id {id_type}, nombre TEXT NOT NULL UNIQUE,
+                descripcion TEXT, horario_inicio TEXT, horario_fin TEXT,
+                activo {bool_type},
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"""
+        )
         conn.execute(
             """CREATE TABLE IF NOT EXISTS login_intentos (
                 correo TEXT PRIMARY KEY, intentos INTEGER NOT NULL DEFAULT 0,
                 bloqueado_hasta TEXT, actualizado_en TEXT NOT NULL)"""
+        )
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mercaderia_insumo_fecha "
+            "ON mercaderia (insumo_id, registrado_en)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mercaderia_proveedor "
+            "ON mercaderia (proveedor_id)"
         )
 
         if db.is_postgres:
