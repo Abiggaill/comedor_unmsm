@@ -24,14 +24,19 @@ def create_app(test_config=None):
         static_folder=str(project_root / "static"),
     )
     secret_key = os.environ.get("SECRET_KEY")
-    if os.environ.get("RENDER") and not secret_key:
-        raise RuntimeError("Configura SECRET_KEY como variable de entorno en Render.")
+    is_production = bool(
+        os.environ.get("RENDER")
+        or os.environ.get("RAILWAY_ENVIRONMENT_NAME")
+        or os.environ.get("RAILWAY_SERVICE_ID")
+    )
+    if is_production and not secret_key:
+        raise RuntimeError("Configura SECRET_KEY como variable de entorno en la plataforma de hosting.")
 
     app.config.from_mapping(
         SECRET_KEY=secret_key or os.urandom(32),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
+        SESSION_COOKIE_SECURE=is_production,
         CLOUDINARY_CLOUD_NAME=os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip(),
         CLOUDINARY_API_KEY=os.environ.get("CLOUDINARY_API_KEY", "").strip(),
         CLOUDINARY_API_SECRET=os.environ.get("CLOUDINARY_API_SECRET", "").strip(),
@@ -42,6 +47,11 @@ def create_app(test_config=None):
 
     initialize_schema()
     CSRFProtect(app)
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}, 200
+
     app.register_blueprint(auth)
     app.register_blueprint(dashboard)
     app.register_blueprint(gestion)

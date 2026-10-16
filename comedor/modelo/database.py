@@ -1,4 +1,4 @@
-"""Singleton database factory for local SQLite and Render PostgreSQL."""
+"""Singleton database factory for local SQLite and hosted PostgreSQL."""
 
 import os
 import sqlite3
