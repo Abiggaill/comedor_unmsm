@@ -1,6 +1,7 @@
-"""Administrator screens for the project's academic sales demonstration."""
+"""Administrator screens for the dining service's order and sales workflow."""
 
 from decimal import Decimal, InvalidOperation
+import re
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
@@ -23,6 +24,7 @@ def inicio():
         productos=ventas_repository.productos(),
         clientes=ventas_repository.clientes(),
         documentos=ventas_repository.documentos(),
+        formas_pago=Venta.FORMAS_PAGO,
     )
 
 
@@ -83,12 +85,11 @@ def nueva_solicitud():
     try:
         solicitud_id = Venta.crear_solicitud(
             cliente_id, cliente_nombre, session.get("user_id"), nota, items,
-            es_demo=True,
         )
     except (ValueError, db.database_error):
         flash("No se pudo guardar la solicitud. Revisa los datos e inténtalo otra vez.", "error")
         return redirect(url_for("ventas.inicio"))
-    flash(f"Solicitud #{solicitud_id} creada.", "success")
+    flash(f"Pedido #{solicitud_id} registrado.", "success")
     return redirect(url_for("ventas.inicio"))
 
 
@@ -125,7 +126,7 @@ def convertir_solicitud(solicitud_id):
     except db.integrity_error:
         venta_id = None
     if venta_id:
-        flash(f"Solicitud convertida en venta de demostración #{venta_id}.", "success")
+        flash(f"Pedido convertido en venta #{venta_id}.", "success")
     else:
         flash("Solo una solicitud aprobada con productos puede convertirse en venta.", "error")
     return redirect(url_for("ventas.inicio"))
@@ -136,10 +137,14 @@ def convertir_solicitud(solicitud_id):
 def actualizar_venta(venta_id):
     estado = request.form.get("estado", "")
     forma_pago = request.form.get("forma_pago", "").strip()
-    if estado not in Venta.ESTADOS_VENTA or len(forma_pago) > 40:
+    if (
+        estado not in Venta.ESTADOS_VENTA
+        or len(forma_pago) > 40
+        or (estado == "PAGADA" and forma_pago not in Venta.FORMAS_PAGO)
+    ):
         flash("Revisa el estado o el nombre de la forma de pago.", "error")
     elif ventas_repository.actualizar_venta(venta_id, estado, forma_pago):
-        flash("La venta de demostración se actualizó.", "success")
+        flash("La venta se actualizó.", "success")
     else:
         flash("No se encontró la venta o ya está anulada.", "error")
     return redirect(url_for("ventas.inicio"))
@@ -160,14 +165,33 @@ def eliminar_venta(venta_id):
 def agregar_documento(venta_id):
     tipo = request.form.get("tipo", "")
     numero = request.form.get("numero", "").strip().upper()
-    if tipo not in Venta.TIPOS_DOCUMENTO or not numero.startswith("DEMO-") or len(numero) > 60:
-        flash("Usa Factura, Boleta o Guía y un número que empiece con DEMO-.", "error")
+    numero = numero.upper()
+    if (
+        tipo not in Venta.TIPOS_DOCUMENTO
+        or len(numero) > 60
+        or not re.fullmatch(r"(?!DEMO-)[A-Z0-9]+(?:-[A-Z0-9]+)*", numero)
+    ):
+        flash("Ingresa un tipo y número de documento emitido en tu sistema autorizado.", "error")
     else:
         try:
-            if ventas_repository.crear_documento_demo(venta_id, tipo, numero):
-                flash("Documento de muestra añadido. No es un comprobante válido.", "success")
+            if ventas_repository.crear_documento(venta_id, tipo, numero):
+                flash("Número del documento registrado.", "success")
             else:
-                flash("No se pudo asociar el documento a la venta.", "error")
+                flash("Registra la venta como pagada antes de asociar su documento.", "error")
         except db.integrity_error:
-            flash("Ese número de documento ya existe.", "error")
+            flash("El número ya existe o la venta no es válida.", "error")
+    return redirect(url_for("ventas.inicio"))
+
+
+@ventas.post("/gestion/ventas/documentos/<tipo>/<int:documento_id>/estado")
+@role_required("Administrador")
+def actualizar_estado_documento(tipo, documento_id):
+    tipo = tipo.upper()
+    estado = request.form.get("estado", "")
+    if tipo not in Venta.ESTADOS_DOCUMENTO or estado not in Venta.ESTADOS_DOCUMENTO[tipo]:
+        flash("El tipo o estado del documento no es válido.", "error")
+    elif ventas_repository.actualizar_estado_documento(tipo, documento_id, estado):
+        flash("El estado del documento se actualizó. Verifica también el sistema que lo emitió.", "success")
+    else:
+        flash("No se encontró el documento.", "error")
     return redirect(url_for("ventas.inicio"))

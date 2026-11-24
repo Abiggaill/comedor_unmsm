@@ -105,8 +105,8 @@ def initialize_schema():
                 bloqueado_hasta TEXT, actualizado_en TEXT NOT NULL)"""
         )
 
-        # Stage 6: academic order-to-sale workflow. Documents created by this
-        # module are marked as demonstrations and are not tax documents.
+        # Stage 6: operational order-to-sale workflow. The legacy es_demo
+        # columns remain for backward compatibility and are false for new data.
         conn.execute(
             f"""CREATE TABLE IF NOT EXISTS solicitudes_pedido (
                 id {id_type}, cliente_id BIGINT,
@@ -155,8 +155,8 @@ def initialize_schema():
                 id {id_type}, venta_id BIGINT NOT NULL, tipo TEXT NOT NULL
                     CHECK (tipo IN ('FACTURA','BOLETA')),
                 numero TEXT NOT NULL UNIQUE,
-                estado TEXT NOT NULL DEFAULT 'DEMO'
-                    CHECK (estado IN ('DEMO','ANULADO')),
+                estado TEXT NOT NULL DEFAULT 'REGISTRADO'
+                    CHECK (estado IN ('REGISTRADO','ANULADO')),
                 es_demo {bool_type}, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)"""
         )
@@ -164,8 +164,8 @@ def initialize_schema():
             f"""CREATE TABLE IF NOT EXISTS guias (
                 id {id_type}, venta_id BIGINT NOT NULL,
                 numero TEXT NOT NULL UNIQUE,
-                estado TEXT NOT NULL DEFAULT 'DEMO'
-                    CHECK (estado IN ('DEMO','DESPACHADA','ANULADA')),
+                estado TEXT NOT NULL DEFAULT 'REGISTRADO'
+                    CHECK (estado IN ('REGISTRADO','DESPACHADA','ANULADA')),
                 es_demo {bool_type}, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)"""
         )
@@ -177,6 +177,107 @@ def initialize_schema():
                 creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (actor_user_id) REFERENCES usuarios (id) ON DELETE SET NULL)"""
         )
+
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS schema_migrations (
+                   version TEXT PRIMARY KEY,
+                   applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"""
+        )
+        migration_version = "2026_11_operational_sales"
+        migration_applied = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?", (migration_version,)
+        ).fetchone()
+        if not migration_applied:
+            # Remove only records that the previous application explicitly
+            # marked as examples, plus its exact stage-five fixture labels.
+            conn.execute("DELETE FROM ventas WHERE es_demo = TRUE")
+            conn.execute("DELETE FROM solicitudes_pedido WHERE es_demo = TRUE")
+            conn.execute("DELETE FROM comprobantes WHERE es_demo = TRUE")
+            conn.execute("DELETE FROM guias WHERE es_demo = TRUE")
+            conn.execute(
+                """DELETE FROM producto_insumos
+                   WHERE producto_id IN (SELECT id FROM productos WHERE nombre = ?)
+                      OR insumo_id IN (SELECT id FROM insumos WHERE nombre = ?)""",
+                ("DEMO - Arroz con pollo", "DEMO - Arroz"),
+            )
+            conn.execute(
+                "DELETE FROM mercaderia WHERE lote = ? OR observacion = ?",
+                ("DEMO-ETAPA5-001", "Movimiento ficticio de demostración"),
+            )
+            conn.execute("DELETE FROM clientes WHERE telefono = ?", ("999000002",))
+            conn.execute("DELETE FROM productos WHERE nombre = ?", ("DEMO - Arroz con pollo",))
+            conn.execute("DELETE FROM insumos WHERE nombre = ?", ("DEMO - Arroz",))
+            conn.execute("DELETE FROM proveedores WHERE razon_social = ?", ("DEMO - Proveedor de alimentos",))
+            conn.execute("DELETE FROM servicios WHERE nombre = ?", ("DEMO - Almuerzo",))
+
+            if db.is_postgres:
+                conn.execute("ALTER TABLE comprobantes DROP CONSTRAINT IF EXISTS comprobantes_estado_check")
+                conn.execute("ALTER TABLE comprobantes ALTER COLUMN estado SET DEFAULT 'REGISTRADO'")
+                conn.execute("UPDATE comprobantes SET estado = 'REGISTRADO' WHERE estado = 'DEMO'")
+                conn.execute(
+                    "ALTER TABLE comprobantes ADD CONSTRAINT comprobantes_estado_check "
+                    "CHECK (estado IN ('REGISTRADO','ANULADO'))"
+                )
+                conn.execute("ALTER TABLE guias DROP CONSTRAINT IF EXISTS guias_estado_check")
+                conn.execute("ALTER TABLE guias ALTER COLUMN estado SET DEFAULT 'REGISTRADO'")
+                conn.execute("UPDATE guias SET estado = 'REGISTRADO' WHERE estado = 'DEMO'")
+                conn.execute(
+                    "ALTER TABLE guias ADD CONSTRAINT guias_estado_check "
+                    "CHECK (estado IN ('REGISTRADO','DESPACHADA','ANULADA'))"
+                )
+            else:
+                # SQLite cannot alter a CHECK constraint in place. Rebuild
+                # the tables once, preserving valid non-example records.
+                comprobantes_sql = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'comprobantes'"
+                ).fetchone()["sql"]
+                if "'DEMO'" in comprobantes_sql:
+                    conn.execute(
+                        """CREATE TABLE comprobantes_actualizado (
+                               id INTEGER PRIMARY KEY AUTOINCREMENT,
+                               venta_id BIGINT NOT NULL,
+                               tipo TEXT NOT NULL CHECK (tipo IN ('FACTURA','BOLETA')),
+                               numero TEXT NOT NULL UNIQUE,
+                               estado TEXT NOT NULL DEFAULT 'REGISTRADO'
+                                   CHECK (estado IN ('REGISTRADO','ANULADO')),
+                               es_demo INTEGER NOT NULL DEFAULT 0,
+                               creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                               FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)"""
+                    )
+                    conn.execute(
+                        """INSERT INTO comprobantes_actualizado
+                               (id, venta_id, tipo, numero, estado, es_demo, creado_en)
+                           SELECT id, venta_id, tipo, numero, 'REGISTRADO', 0, creado_en
+                           FROM comprobantes WHERE es_demo = FALSE"""
+                    )
+                    conn.execute("DROP TABLE comprobantes")
+                    conn.execute("ALTER TABLE comprobantes_actualizado RENAME TO comprobantes")
+                guias_sql = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'guias'"
+                ).fetchone()["sql"]
+                if "'DEMO'" in guias_sql:
+                    conn.execute(
+                        """CREATE TABLE guias_actualizado (
+                               id INTEGER PRIMARY KEY AUTOINCREMENT,
+                               venta_id BIGINT NOT NULL,
+                               numero TEXT NOT NULL UNIQUE,
+                               estado TEXT NOT NULL DEFAULT 'REGISTRADO'
+                                   CHECK (estado IN ('REGISTRADO','DESPACHADA','ANULADA')),
+                               es_demo INTEGER NOT NULL DEFAULT 0,
+                               creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                               FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)"""
+                    )
+                    conn.execute(
+                        """INSERT INTO guias_actualizado
+                               (id, venta_id, numero, estado, es_demo, creado_en)
+                           SELECT id, venta_id, numero, 'REGISTRADO', 0, creado_en
+                           FROM guias WHERE es_demo = FALSE"""
+                    )
+                    conn.execute("DROP TABLE guias")
+                    conn.execute("ALTER TABLE guias_actualizado RENAME TO guias")
+            conn.execute(
+                "INSERT INTO schema_migrations (version) VALUES (?)", (migration_version,)
+            )
 
         # Add reporting fields to databases already created by earlier versions.
         reporting_columns = {
@@ -216,162 +317,6 @@ def initialize_schema():
             "CREATE INDEX IF NOT EXISTS idx_mercaderia_proveedor "
             "ON mercaderia (proveedor_id)"
         )
-        # These indexes make the labelled demonstration records idempotent
-        # when Render starts several application workers at deployment time.
-        if db.is_postgres:
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_proveedores_razon_social "
-                "ON proveedores (razon_social)"
-            )
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_mercaderia_demo_lote "
-                "ON mercaderia (lote) WHERE lote = 'DEMO-ETAPA5-001'"
-            )
-
-            conn.execute(
-                """INSERT INTO proveedores
-                       (razon_social, nombre_contacto, telefono, correo, direccion, activo)
-                   VALUES (?, ?, ?, ?, ?, TRUE)
-                   ON CONFLICT (razon_social) DO NOTHING""",
-                (
-                    "DEMO - Proveedor de alimentos",
-                    "Contacto de prueba",
-                    "999000001",
-                    "proveedor.demo@example.com",
-                    "Dirección ficticia - Lima",
-                ),
-            )
-            conn.execute(
-                """INSERT INTO servicios
-                       (nombre, descripcion, horario_inicio, horario_fin, activo)
-                   VALUES (?, ?, ?, ?, TRUE)
-                   ON CONFLICT (nombre) DO NOTHING""",
-                (
-                    "DEMO - Almuerzo",
-                    "Servicio de ejemplo para probar la tabla servicios",
-                    "12:00",
-                    "15:00",
-                ),
-            )
-            conn.execute(
-                """INSERT INTO productos (nombre, categoria, descripcion, activo)
-                   VALUES (?, ?, ?, TRUE)
-                   ON CONFLICT (nombre, categoria) DO NOTHING""",
-                (
-                    "DEMO - Arroz con pollo",
-                    "Segundo",
-                    "Plato ficticio de demostración",
-                ),
-            )
-            conn.execute(
-                """INSERT INTO insumos (nombre, unidad_medida, stock_minimo, activo)
-                   VALUES (?, ?, ?, TRUE)
-                   ON CONFLICT (nombre) DO NOTHING""",
-                ("DEMO - Arroz", "kg", 2.000),
-            )
-
-            # Clients belong to existing student accounts; do not invent a
-            # login or attach the demo profile to an administrator account.
-            conn.execute(
-                """INSERT INTO clientes (usuario_id, telefono, activo)
-                   SELECT u.id, ?, TRUE
-                   FROM usuarios AS u
-                   WHERE u.rol = 'Estudiante'
-                     AND NOT EXISTS (
-                         SELECT 1 FROM clientes AS demo
-                         WHERE demo.telefono = '999000002'
-                     )
-                     AND NOT EXISTS (
-                         SELECT 1 FROM clientes AS c WHERE c.usuario_id = u.id
-                     )
-                   ORDER BY u.id
-                   LIMIT 1
-                   ON CONFLICT (usuario_id) DO NOTHING""",
-                ("999000002",),
-            )
-            conn.execute(
-                """INSERT INTO mercaderia
-                       (insumo_id, proveedor_id, tipo_movimiento, cantidad,
-                        costo_unitario, lote, observacion)
-                   SELECT i.id, p.id, 'ENTRADA', ?, ?, ?, ?
-                   FROM insumos AS i
-                   CROSS JOIN proveedores AS p
-                   WHERE i.nombre = ? AND p.razon_social = ?
-                   ON CONFLICT DO NOTHING""",
-                (
-                    10.000,
-                    4.50,
-                    "DEMO-ETAPA5-001",
-                    "Movimiento ficticio de demostración",
-                    "DEMO - Arroz",
-                    "DEMO - Proveedor de alimentos",
-                ),
-            )
-            conn.execute(
-                """INSERT INTO producto_insumos
-                       (producto_id, insumo_id, cantidad, unidad_medida)
-                   SELECT p.id, i.id, ?, ?
-                   FROM productos AS p
-                   CROSS JOIN insumos AS i
-                   WHERE p.nombre = ? AND p.categoria = ? AND i.nombre = ?
-                   ON CONFLICT (producto_id, insumo_id) DO NOTHING""",
-                (
-                    0.150,
-                    "kg",
-                    "DEMO - Arroz con pollo",
-                    "Segundo",
-                    "DEMO - Arroz",
-                ),
-            )
-
-            # One clearly labelled example row for the academic sales demo.
-            conn.execute(
-                """INSERT INTO solicitudes_pedido
-                       (cliente_nombre, estado, nota, es_demo)
-                   SELECT 'Cliente de demostración', 'APROBADA',
-                          'Registro académico ficticio; no representa una operación real.', TRUE
-                   WHERE NOT EXISTS (
-                       SELECT 1 FROM solicitudes_pedido WHERE nota LIKE 'Registro académico ficticio%'
-                   )"""
-            )
-            conn.execute(
-                """INSERT INTO solicitudes_pedido_detalle
-                       (solicitud_id, producto_id, cantidad, precio_unitario, subtotal)
-                   SELECT s.id, p.id, 1, 12.50, 12.50
-                   FROM solicitudes_pedido s CROSS JOIN productos p
-                   WHERE s.nota LIKE 'Registro académico ficticio%'
-                     AND p.nombre = 'DEMO - Arroz con pollo'
-                     AND NOT EXISTS (
-                         SELECT 1 FROM solicitudes_pedido_detalle d WHERE d.solicitud_id = s.id
-                     )"""
-            )
-            conn.execute(
-                """INSERT INTO ventas (solicitud_id, cliente_nombre, estado, forma_pago, total, es_demo)
-                   SELECT s.id, s.cliente_nombre, 'PAGADA', 'EFECTIVO (DEMO)', 12.50, TRUE
-                   FROM solicitudes_pedido s
-                   WHERE s.nota LIKE 'Registro académico ficticio%'
-                     AND NOT EXISTS (SELECT 1 FROM ventas v WHERE v.solicitud_id = s.id)"""
-            )
-            conn.execute(
-                """INSERT INTO ventas_detalle (venta_id, producto_id, cantidad, precio_unitario, subtotal)
-                   SELECT v.id, p.id, 1, 12.50, 12.50
-                   FROM ventas v CROSS JOIN productos p
-                   WHERE v.es_demo = TRUE AND p.nombre = 'DEMO - Arroz con pollo'
-                     AND NOT EXISTS (SELECT 1 FROM ventas_detalle d WHERE d.venta_id = v.id)"""
-            )
-            conn.execute(
-                """INSERT INTO comprobantes (venta_id, tipo, numero, estado, es_demo)
-                   SELECT v.id, 'BOLETA', 'DEMO-BOLETA-001', 'DEMO', TRUE
-                   FROM ventas v WHERE v.es_demo = TRUE
-                   ON CONFLICT (numero) DO NOTHING"""
-            )
-            conn.execute(
-                """INSERT INTO guias (venta_id, numero, estado, es_demo)
-                   SELECT v.id, 'DEMO-GUIA-001', 'DEMO', TRUE
-                   FROM ventas v WHERE v.es_demo = TRUE
-                   ON CONFLICT (numero) DO NOTHING"""
-            )
-
         if db.is_postgres:
             rows = conn.execute(
                 "SELECT column_name FROM information_schema.columns "
