@@ -25,6 +25,8 @@
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('gestion.usuarios') }}"><span aria-hidden="true">♙</span> Usuarios</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('gestion.menu') }}"><span aria-hidden="true">🍽</span> Gestión del menú</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('gestion.ventanilla') }}"><span aria-hidden="true">✓</span> Ventanilla</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('ventas.inicio') }}"><span aria-hidden="true">S/</span> Ventas demo</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('reportes.inicio') }}"><span aria-hidden="true">▥</span> Reportes</a></li>
                 </ul>
                 <hr class="sidebar-divider">
                 <p class="sidebar-heading">COMEDOR</p>
@@ -70,7 +72,7 @@
                                             <td>
                                                 {% if campo == 'activo' %}<span class="inventory-status {{ 'is-active' if valor else 'is-inactive' }}">{{ 'Activo' if valor else 'Inactivo' }}</span>
                                                 {% elif campo in ('cantidad', 'stock_actual', 'stock_minimo') and valor is not none %}{{ '%.3f'|format(valor|float) }}
-                                                {% elif campo == 'costo_unitario' and valor is not none %}S/ {{ '%.2f'|format(valor|float) }}
+                                                {% elif campo in ('costo_unitario', 'precio') and valor is not none %}S/ {{ '%.2f'|format(valor|float) }}
                                                 {% elif valor is none or valor == '' %}<span class="inventory-muted">—</span>
                                                 {% else %}{{ valor }}{% endif %}
                                             </td>

@@ -9,9 +9,9 @@ class InventarioRepository:
     _ENTIDADES = {
         "clientes": {
             "tabla": "clientes",
-            "campos": ("usuario_id", "telefono", "activo"),
+            "campos": ("usuario_id", "telefono", "ubicacion", "categoria", "activo"),
             "lista": """SELECT c.id, c.usuario_id, u.nombres AS cliente,
-                              u.correo, c.telefono, c.activo
+                              u.correo, c.telefono, c.ubicacion, c.categoria, c.activo
                        FROM clientes c JOIN usuarios u ON u.id = c.usuario_id
                        ORDER BY u.nombres, c.id""",
         },
@@ -19,14 +19,14 @@ class InventarioRepository:
             "tabla": "proveedores",
             "campos": (
                 "ruc", "razon_social", "nombre_contacto", "telefono",
-                "correo", "direccion", "activo",
+                "correo", "direccion", "categoria", "ubicacion", "evaluacion", "activo",
             ),
-            "lista": "SELECT id, ruc, razon_social, nombre_contacto, telefono, correo, direccion, activo FROM proveedores ORDER BY razon_social, id",
+            "lista": "SELECT id, ruc, razon_social, nombre_contacto, telefono, correo, direccion, categoria, ubicacion, evaluacion, activo FROM proveedores ORDER BY razon_social, id",
         },
         "productos": {
             "tabla": "productos",
-            "campos": ("nombre", "categoria", "descripcion", "imagen_url", "activo"),
-            "lista": "SELECT id, nombre, categoria, descripcion, imagen_url, activo FROM productos ORDER BY categoria, nombre, id",
+            "campos": ("nombre", "categoria", "descripcion", "imagen_url", "precio", "activo"),
+            "lista": "SELECT id, nombre, categoria, descripcion, imagen_url, precio, activo FROM productos ORDER BY categoria, nombre, id",
         },
         "insumos": {
             "tabla": "insumos",
@@ -59,9 +59,9 @@ class InventarioRepository:
         "servicios": {
             "tabla": "servicios",
             "campos": (
-                "nombre", "descripcion", "horario_inicio", "horario_fin", "activo",
+                "nombre", "descripcion", "horario_inicio", "horario_fin", "precio", "activo",
             ),
-            "lista": "SELECT id, nombre, descripcion, horario_inicio, horario_fin, activo FROM servicios ORDER BY nombre, id",
+            "lista": "SELECT id, nombre, descripcion, horario_inicio, horario_fin, precio, activo FROM servicios ORDER BY nombre, id",
         },
     }
 

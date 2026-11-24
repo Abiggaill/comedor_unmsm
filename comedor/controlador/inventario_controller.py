@@ -18,10 +18,12 @@ ENTIDADES = {
         "titulo": "Clientes",
         "singular": "cliente",
         "descripcion": "Asocia estudiantes registrados con el servicio del comedor.",
-        "columnas": (("cliente", "Estudiante"), ("correo", "Correo"), ("telefono", "Teléfono"), ("activo", "Estado")),
+        "columnas": (("cliente", "Estudiante"), ("correo", "Correo"), ("telefono", "Teléfono"), ("ubicacion", "Ubicación"), ("categoria", "Categoría"), ("activo", "Estado")),
         "campos": (
             {"nombre": "usuario_id", "etiqueta": "Cuenta de estudiante", "tipo": "select", "opciones": "estudiantes", "requerido": True},
             {"nombre": "telefono", "etiqueta": "Teléfono (opcional)", "tipo": "text", "maximo": 30},
+            {"nombre": "ubicacion", "etiqueta": "Ubicación (opcional)", "tipo": "text", "maximo": 180},
+            {"nombre": "categoria", "etiqueta": "Categoría (opcional)", "tipo": "text", "maximo": 100},
             {"nombre": "activo", "etiqueta": "Cliente activo", "tipo": "checkbox"},
         ),
     },
@@ -29,7 +31,7 @@ ENTIDADES = {
         "titulo": "Proveedores",
         "singular": "proveedor",
         "descripcion": "Guarda los datos de contacto de quienes suministran alimentos e insumos.",
-        "columnas": (("razon_social", "Razón social"), ("ruc", "RUC"), ("nombre_contacto", "Contacto"), ("telefono", "Teléfono"), ("correo", "Correo"), ("activo", "Estado")),
+        "columnas": (("razon_social", "Razón social"), ("ruc", "RUC"), ("nombre_contacto", "Contacto"), ("telefono", "Teléfono"), ("correo", "Correo"), ("categoria", "Categoría"), ("ubicacion", "Ubicación"), ("evaluacion", "Evaluación"), ("activo", "Estado")),
         "campos": (
             {"nombre": "razon_social", "etiqueta": "Razón social", "tipo": "text", "requerido": True, "maximo": 180},
             {"nombre": "ruc", "etiqueta": "RUC (opcional)", "tipo": "text", "maximo": 20},
@@ -37,6 +39,9 @@ ENTIDADES = {
             {"nombre": "telefono", "etiqueta": "Teléfono", "tipo": "text", "maximo": 30},
             {"nombre": "correo", "etiqueta": "Correo", "tipo": "email", "maximo": 254},
             {"nombre": "direccion", "etiqueta": "Dirección", "tipo": "text", "maximo": 240},
+            {"nombre": "categoria", "etiqueta": "Categoría de proveedor (opcional)", "tipo": "text", "maximo": 100},
+            {"nombre": "ubicacion", "etiqueta": "Ubicación (opcional)", "tipo": "text", "maximo": 180},
+            {"nombre": "evaluacion", "etiqueta": "Evaluación de demostración (0–5)", "tipo": "number", "minimo": "0", "maximo_numero": "5", "paso": "0.01"},
             {"nombre": "activo", "etiqueta": "Proveedor activo", "tipo": "checkbox"},
         ),
     },
@@ -44,12 +49,13 @@ ENTIDADES = {
         "titulo": "Productos y platos",
         "singular": "producto",
         "descripcion": "Mantiene un catálogo de platos. El menú publicado se sigue gestionando desde Gestión del menú.",
-        "columnas": (("nombre", "Producto o plato"), ("categoria", "Categoría"), ("descripcion", "Descripción"), ("activo", "Estado")),
+        "columnas": (("nombre", "Producto o plato"), ("categoria", "Categoría"), ("descripcion", "Descripción"), ("precio", "Precio de demostración"), ("activo", "Estado")),
         "campos": (
             {"nombre": "nombre", "etiqueta": "Nombre del producto o plato", "tipo": "text", "requerido": True, "maximo": 180},
             {"nombre": "categoria", "etiqueta": "Categoría", "tipo": "select", "requerido": True, "opciones": (("Entrada", "Entrada"), ("Segundo", "Segundo"), ("Postre", "Postre"), ("Bebida", "Bebida"), ("Otro", "Otro"))},
             {"nombre": "descripcion", "etiqueta": "Descripción", "tipo": "textarea", "maximo": 1000},
             {"nombre": "imagen_url", "etiqueta": "Enlace de imagen (opcional)", "tipo": "url", "maximo": 2048},
+            {"nombre": "precio", "etiqueta": "Precio referencial (S/)", "tipo": "number", "requerido": True, "minimo": "0", "paso": "0.01"},
             {"nombre": "activo", "etiqueta": "Producto activo", "tipo": "checkbox"},
         ),
     },
@@ -85,12 +91,13 @@ ENTIDADES = {
         "titulo": "Servicios de comedor",
         "singular": "servicio",
         "descripcion": "Administra tipos de atención, por ejemplo desayuno, almuerzo o cena.",
-        "columnas": (("nombre", "Servicio"), ("descripcion", "Descripción"), ("horario_inicio", "Desde"), ("horario_fin", "Hasta"), ("activo", "Estado")),
+        "columnas": (("nombre", "Servicio"), ("descripcion", "Descripción"), ("horario_inicio", "Desde"), ("horario_fin", "Hasta"), ("precio", "Precio referencial"), ("activo", "Estado")),
         "campos": (
             {"nombre": "nombre", "etiqueta": "Nombre del servicio", "tipo": "text", "requerido": True, "maximo": 120},
             {"nombre": "descripcion", "etiqueta": "Descripción", "tipo": "textarea", "maximo": 500},
             {"nombre": "horario_inicio", "etiqueta": "Hora de inicio (opcional)", "tipo": "time"},
             {"nombre": "horario_fin", "etiqueta": "Hora de fin (opcional)", "tipo": "time"},
+            {"nombre": "precio", "etiqueta": "Precio referencial (S/)", "tipo": "number", "requerido": True, "minimo": "0", "paso": "0.01"},
             {"nombre": "activo", "etiqueta": "Servicio activo", "tipo": "checkbox"},
         ),
     },
@@ -160,6 +167,8 @@ def _validar_y_convertir(recurso, registro_id=None):
             except ValueError:
                 return None, f'Escribe un número válido en «{campo["etiqueta"]}».'
             if not math.isfinite(numero) or numero < float(campo.get("minimo", "0")):
+                return None, f'El valor de «{campo["etiqueta"]}» está fuera del rango permitido.'
+            if campo.get("maximo_numero") is not None and numero > float(campo["maximo_numero"]):
                 return None, f'El valor de «{campo["etiqueta"]}» está fuera del rango permitido.'
             datos[nombre] = numero
         elif tipo == "email":

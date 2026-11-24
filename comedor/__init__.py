@@ -4,14 +4,17 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request, session
 from flask_wtf.csrf import CSRFProtect
 
 from .controlador.auth_controller import auth
 from .controlador.dashboard_controller import dashboard
 from .controlador.gestion_controller import gestion
 from .controlador.inventario_controller import inventario
+from .controlador.reportes_controller import reportes
+from .controlador.ventas_controller import ventas
 from .modelo.schema import initialize_schema
+from .modelo.observer import event_subject
 
 
 def create_app(test_config=None):
@@ -48,6 +51,31 @@ def create_app(test_config=None):
     initialize_schema()
     CSRFProtect(app)
 
+    @app.after_request
+    def registrar_actividad(response):
+        if request.endpoint != "static" and request.path != "/health":
+            metodo = request.method
+            es_operacion = metodo in {"POST", "PUT", "PATCH", "DELETE"}
+            try:
+                event_subject.publish(
+                    {
+                        "actor_user_id": session.get("user_id"),
+                        "actor_email": (
+                            session.get("correo")
+                            or request.form.get("correo", "").strip().lower()[:254]
+                            or None
+                        ),
+                        "tipo": "operacion" if es_operacion else "acceso",
+                        "endpoint": request.endpoint or "desconocido",
+                        "metodo": metodo,
+                        "estado_http": response.status_code,
+                        "descripcion": "Solicitud web registrada por Observer.",
+                    }
+                )
+            except Exception:
+                app.logger.exception("No se pudo registrar la actividad web")
+        return response
+
     @app.get("/health")
     def health():
         return {"status": "ok"}, 200
@@ -56,4 +84,6 @@ def create_app(test_config=None):
     app.register_blueprint(dashboard)
     app.register_blueprint(gestion)
     app.register_blueprint(inventario)
+    app.register_blueprint(reportes)
+    app.register_blueprint(ventas)
     return app

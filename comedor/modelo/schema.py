@@ -51,7 +51,9 @@ def initialize_schema():
         conn.execute(
             f"""CREATE TABLE IF NOT EXISTS productos (
                 id {id_type}, nombre TEXT NOT NULL, categoria TEXT,
-                descripcion TEXT, imagen_url TEXT, activo {bool_type},
+                descripcion TEXT, imagen_url TEXT,
+                precio NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (precio >= 0),
+                activo {bool_type},
                 creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (nombre, categoria))"""
         )
@@ -102,6 +104,109 @@ def initialize_schema():
                 correo TEXT PRIMARY KEY, intentos INTEGER NOT NULL DEFAULT 0,
                 bloqueado_hasta TEXT, actualizado_en TEXT NOT NULL)"""
         )
+
+        # Stage 6: academic order-to-sale workflow. Documents created by this
+        # module are marked as demonstrations and are not tax documents.
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS solicitudes_pedido (
+                id {id_type}, cliente_id BIGINT,
+                cliente_nombre TEXT NOT NULL,
+                solicitante_id BIGINT,
+                estado TEXT NOT NULL DEFAULT 'BORRADOR'
+                    CHECK (estado IN ('BORRADOR','APROBADA','RECHAZADA','CONVERTIDA','CANCELADA')),
+                nota TEXT, es_demo {bool_type},
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE SET NULL,
+                FOREIGN KEY (solicitante_id) REFERENCES usuarios (id) ON DELETE SET NULL)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS solicitudes_pedido_detalle (
+                id {id_type}, solicitud_id BIGINT NOT NULL, producto_id BIGINT NOT NULL,
+                cantidad NUMERIC(12, 3) NOT NULL CHECK (cantidad > 0),
+                precio_unitario NUMERIC(12, 2) NOT NULL CHECK (precio_unitario >= 0),
+                subtotal NUMERIC(12, 2) NOT NULL CHECK (subtotal >= 0),
+                FOREIGN KEY (solicitud_id) REFERENCES solicitudes_pedido (id) ON DELETE CASCADE,
+                FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE RESTRICT)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS ventas (
+                id {id_type}, solicitud_id BIGINT UNIQUE,
+                cliente_id BIGINT, cliente_nombre TEXT NOT NULL,
+                vendedor_id BIGINT,
+                estado TEXT NOT NULL DEFAULT 'PENDIENTE_PAGO'
+                    CHECK (estado IN ('PENDIENTE_PAGO','PAGADA','ANULADA')),
+                forma_pago TEXT, total NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (total >= 0),
+                es_demo {bool_type}, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (solicitud_id) REFERENCES solicitudes_pedido (id) ON DELETE SET NULL,
+                FOREIGN KEY (cliente_id) REFERENCES clientes (id) ON DELETE SET NULL,
+                FOREIGN KEY (vendedor_id) REFERENCES usuarios (id) ON DELETE SET NULL)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS ventas_detalle (
+                id {id_type}, venta_id BIGINT NOT NULL, producto_id BIGINT NOT NULL,
+                cantidad NUMERIC(12, 3) NOT NULL CHECK (cantidad > 0),
+                precio_unitario NUMERIC(12, 2) NOT NULL CHECK (precio_unitario >= 0),
+                subtotal NUMERIC(12, 2) NOT NULL CHECK (subtotal >= 0),
+                FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE,
+                FOREIGN KEY (producto_id) REFERENCES productos (id) ON DELETE RESTRICT)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS comprobantes (
+                id {id_type}, venta_id BIGINT NOT NULL, tipo TEXT NOT NULL
+                    CHECK (tipo IN ('FACTURA','BOLETA')),
+                numero TEXT NOT NULL UNIQUE,
+                estado TEXT NOT NULL DEFAULT 'DEMO'
+                    CHECK (estado IN ('DEMO','ANULADO')),
+                es_demo {bool_type}, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS guias (
+                id {id_type}, venta_id BIGINT NOT NULL,
+                numero TEXT NOT NULL UNIQUE,
+                estado TEXT NOT NULL DEFAULT 'DEMO'
+                    CHECK (estado IN ('DEMO','DESPACHADA','ANULADA')),
+                es_demo {bool_type}, creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (venta_id) REFERENCES ventas (id) ON DELETE CASCADE)"""
+        )
+        conn.execute(
+            f"""CREATE TABLE IF NOT EXISTS actividad_sistema (
+                id {id_type}, actor_user_id BIGINT, actor_email TEXT,
+                tipo TEXT NOT NULL, endpoint TEXT, metodo TEXT,
+                estado_http INTEGER, descripcion TEXT,
+                creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (actor_user_id) REFERENCES usuarios (id) ON DELETE SET NULL)"""
+        )
+
+        # Add reporting fields to databases already created by earlier versions.
+        reporting_columns = {
+            "usuarios": {
+                "activo": "BOOLEAN NOT NULL DEFAULT TRUE" if db.is_postgres else "INTEGER NOT NULL DEFAULT 1",
+                "area": "TEXT",
+                "creado_en": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            },
+            "clientes": {"ubicacion": "TEXT", "categoria": "TEXT"},
+            "proveedores": {"categoria": "TEXT", "ubicacion": "TEXT", "evaluacion": "NUMERIC(3, 2)", "entregas_esperadas": "INTEGER NOT NULL DEFAULT 0", "entregas_cumplidas": "INTEGER NOT NULL DEFAULT 0"},
+            "productos": {"precio": "NUMERIC(12, 2) NOT NULL DEFAULT 0"},
+            "servicios": {"precio": "NUMERIC(12, 2) NOT NULL DEFAULT 0"},
+        }
+        for table_name, columns in reporting_columns.items():
+            if db.is_postgres:
+                rows = conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() AND table_name = ?",
+                    (table_name,),
+                ).fetchall()
+                existing_columns = {row["column_name"] for row in rows}
+            else:
+                existing_columns = {
+                    row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})")
+                }
+            for column_name, column_type in columns.items():
+                if column_name not in existing_columns:
+                    conn.execute(
+                        f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                    )
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_mercaderia_insumo_fecha "
@@ -217,6 +322,54 @@ def initialize_schema():
                     "Segundo",
                     "DEMO - Arroz",
                 ),
+            )
+
+            # One clearly labelled example row for the academic sales demo.
+            conn.execute(
+                """INSERT INTO solicitudes_pedido
+                       (cliente_nombre, estado, nota, es_demo)
+                   SELECT 'Cliente de demostración', 'APROBADA',
+                          'Registro académico ficticio; no representa una operación real.', TRUE
+                   WHERE NOT EXISTS (
+                       SELECT 1 FROM solicitudes_pedido WHERE nota LIKE 'Registro académico ficticio%'
+                   )"""
+            )
+            conn.execute(
+                """INSERT INTO solicitudes_pedido_detalle
+                       (solicitud_id, producto_id, cantidad, precio_unitario, subtotal)
+                   SELECT s.id, p.id, 1, 12.50, 12.50
+                   FROM solicitudes_pedido s CROSS JOIN productos p
+                   WHERE s.nota LIKE 'Registro académico ficticio%'
+                     AND p.nombre = 'DEMO - Arroz con pollo'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM solicitudes_pedido_detalle d WHERE d.solicitud_id = s.id
+                     )"""
+            )
+            conn.execute(
+                """INSERT INTO ventas (solicitud_id, cliente_nombre, estado, forma_pago, total, es_demo)
+                   SELECT s.id, s.cliente_nombre, 'PAGADA', 'EFECTIVO (DEMO)', 12.50, TRUE
+                   FROM solicitudes_pedido s
+                   WHERE s.nota LIKE 'Registro académico ficticio%'
+                     AND NOT EXISTS (SELECT 1 FROM ventas v WHERE v.solicitud_id = s.id)"""
+            )
+            conn.execute(
+                """INSERT INTO ventas_detalle (venta_id, producto_id, cantidad, precio_unitario, subtotal)
+                   SELECT v.id, p.id, 1, 12.50, 12.50
+                   FROM ventas v CROSS JOIN productos p
+                   WHERE v.es_demo = TRUE AND p.nombre = 'DEMO - Arroz con pollo'
+                     AND NOT EXISTS (SELECT 1 FROM ventas_detalle d WHERE d.venta_id = v.id)"""
+            )
+            conn.execute(
+                """INSERT INTO comprobantes (venta_id, tipo, numero, estado, es_demo)
+                   SELECT v.id, 'BOLETA', 'DEMO-BOLETA-001', 'DEMO', TRUE
+                   FROM ventas v WHERE v.es_demo = TRUE
+                   ON CONFLICT (numero) DO NOTHING"""
+            )
+            conn.execute(
+                """INSERT INTO guias (venta_id, numero, estado, es_demo)
+                   SELECT v.id, 'DEMO-GUIA-001', 'DEMO', TRUE
+                   FROM ventas v WHERE v.es_demo = TRUE
+                   ON CONFLICT (numero) DO NOTHING"""
             )
 
         if db.is_postgres:

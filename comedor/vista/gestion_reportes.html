@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reportes | Comedor UNMSM</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page admin-page bootstrap-dashboard admin-bootstrap">
+  <header class="navbar navbar-dark bg-dark shadow px-3"><a class="navbar-brand" href="{{ url_for('gestion.usuarios') }}">Comedor <strong>UNMSM</strong></a><div class="ms-auto d-flex align-items-center gap-3 text-white"><span>Hola, {{ session.get('nombres', 'Administrador') }}</span><form action="{{ url_for('auth.logout') }}" method="POST" class="m-0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-outline-light btn-sm">Cerrar sesión</button></form></div></header>
+  <main class="container-fluid px-3 px-lg-5 py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4"><div><p class="eyebrow">ETAPA 7 · REPORTERÍA</p><h1>Reportes del comedor</h1><p>Consulta listas y gráficos; descarga cada reporte como Excel.</p></div><div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{{ url_for('ventas.inicio') }}">Ventas demo</a><a class="btn btn-outline-secondary" href="{{ url_for('inventario.listar', recurso='productos') }}">Inventario</a></div></div>
+    <section class="card shadow-sm mb-4"><div class="card-body row align-items-end g-3"><div class="col-md-8"><label class="form-label" for="report-select">¿Qué quieres revisar?</label><select class="form-select" id="report-select">{% for slug, titulo in reportes %}<option value="{{ slug }}">{{ titulo }}</option>{% endfor %}</select></div><div class="col-md-4"><a class="btn btn-success w-100" id="excel-link" href="#">Descargar este reporte en Excel</a></div></div></section>
+    <div id="report-error" class="alert alert-danger" hidden>No se pudo cargar el reporte. Vuelve a intentarlo.</div>
+    <section class="card shadow-sm mb-4"><div class="card-header"><h2 class="h5 mb-0" id="chart-title">Gráfico</h2></div><div class="card-body"><div id="report-chart" role="img" aria-label="Gráfico del reporte" style="width:100%;height:320px"></div><p class="text-muted small mb-0" id="chart-note">El gráfico muestra cantidad por categoría o los totales, cuando corresponde.</p></div></section>
+    <section class="card shadow-sm"><div class="card-header"><h2 class="h5 mb-0" id="table-title">Datos</h2></div><div class="table-responsive"><table class="table table-striped table-hover align-middle mb-0"><thead id="report-head"></thead><tbody id="report-body"></tbody></table></div></section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script>
+    const picker = document.getElementById('report-select');
+    const chart = window.echarts ? echarts.init(document.getElementById('report-chart')) : null;
+    const safe = value => value === null || value === undefined || value === '' ? '—' : String(value);
+    async function loadReport() {
+      document.getElementById('report-error').hidden = true;
+      const slug = picker.value;
+      document.getElementById('excel-link').href = `/gestion/reportes/${encodeURIComponent(slug)}/excel`;
+      try {
+        const response = await fetch(`/gestion/reportes/${encodeURIComponent(slug)}`);
+        if (!response.ok) throw new Error('No disponible');
+        const data = await response.json();
+        document.getElementById('chart-title').textContent = data.titulo;
+        document.getElementById('table-title').textContent = `Datos: ${data.titulo}`;
+        const head = document.getElementById('report-head');
+        const headerRow = document.createElement('tr');
+        data.columnas.forEach(column => { const th = document.createElement('th'); th.textContent = safe(column); headerRow.appendChild(th); });
+        head.replaceChildren(headerRow);
+        const body = document.getElementById('report-body');
+        if (data.filas.length) {
+          const rows = data.filas.map(row => {
+            const tr = document.createElement('tr');
+            data.columnas.forEach(column => { const td = document.createElement('td'); td.textContent = safe(row[column]); tr.appendChild(td); });
+            return tr;
+          });
+          body.replaceChildren(...rows);
+        } else {
+          const tr = document.createElement('tr'); const td = document.createElement('td');
+          td.colSpan = Math.max(1, data.columnas.length); td.className = 'text-center py-4'; td.textContent = 'Todavía no hay datos.';
+          tr.appendChild(td); body.replaceChildren(tr);
+        }
+        const group = data.columnas.find(c => ['estado','categoria','tipo','rol','tipo_movimiento','periodo'].includes(c));
+        const value = data.columnas.find(c => ['cantidad','total','stock_calculado','precio'].includes(c));
+        if (!chart) {
+          document.getElementById('chart-note').textContent = 'El gráfico requiere conexión a Internet; la tabla y la descarga Excel siguen disponibles.';
+        } else if (group && value && data.filas.length) {
+          chart.setOption({tooltip:{trigger:'axis'},grid:{left:45,right:20,bottom:70},xAxis:{type:'category',data:data.filas.map(r=>safe(r[group])),axisLabel:{rotate:25}},yAxis:{type:'value'},series:[{type:'bar',data:data.filas.map(r=>Number(r[value])||0),itemStyle:{color:'#397a57'}}]});
+          document.getElementById('chart-note').textContent = `La gráfica compara “${value}” por “${group}”.`;
+        } else {
+          chart.setOption({title:{text:data.filas.length ? `${data.filas.length} registros` : 'Sin registros',left:'center',top:'middle'},xAxis:{show:false},yAxis:{show:false},series:[]});
+          document.getElementById('chart-note').textContent = 'Este reporte se presenta como lista porque sus datos no forman grupos numéricos.';
+        }
+      } catch (error) { document.getElementById('report-error').hidden = false; }
+    }
+    picker.addEventListener('change', loadReport);
+    window.addEventListener('resize', () => chart?.resize());
+    loadReport();
+  </script>
+</body></html>
